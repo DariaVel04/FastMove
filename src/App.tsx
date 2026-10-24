@@ -55,6 +55,7 @@ export default function App() {
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null)
   const [sort, setSort] = useState<SortKey>("relevance")
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
+  const [focusTick, setFocusTick] = useState(0)
   const [deviceFix, setDeviceFix] = useState<{ latitude: number; longitude: number } | null>(null)
   const [locationGeneration, setLocationGeneration] = useState(0)
   const [locating, setLocating] = useState(false)
@@ -125,6 +126,7 @@ export default function App() {
 
   function handleShowOnMap(facilityId: string) {
     setSelectedFacilityId(facilityId)
+    setFocusTick((tick) => tick + 1)
     scrollToId("map-title")
   }
 
@@ -218,6 +220,9 @@ export default function App() {
           <FacilityMap
             start={activeOrigin}
             results={visible}
+            linked={[...(outcome?.results ?? []), ...(outcome?.visitCautions ?? [])]}
+            transport={submitted?.query.transport ?? query.transport}
+            focusTick={focusTick}
             selectedFacilityId={selectedFacilityId}
             hasSearched={submitted !== null}
             onSelect={handleSelectFromMap}

@@ -25,12 +25,12 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
-      <p className="how-links">
+      <nav className="how-links" aria-label={t("links.official")}>
         <ExternalLink href={URLS.timmiApp}>{t("link.timmi")}</ExternalLink>
         <ExternalLink href={URLS.ticket}>{t("link.ticket")}</ExternalLink>
         <ExternalLink href={URLS.sportsShop}>{t("link.shopOpen")}</ExternalLink>
         <ExternalLink href={URLS.lipas}>{t("link.lipasBrowse")}</ExternalLink>
-      </p>
+      </nav>
     </section>
   )
 }

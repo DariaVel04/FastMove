@@ -1,4 +1,4 @@
-import type { FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Bike, Bus, Car, Footprints } from "lucide-react"
 import type { ActivityId, MaxOutingMinutes, MinWorkoutMinutes, SearchQuery, TransportMode } from "../domain/types.ts"
 import { MAX_OUTING_OPTIONS, MIN_WORKOUT_OPTIONS, TRANSPORT_MODES } from "../domain/types.ts"
@@ -6,7 +6,7 @@ import { MANUAL_START_IDS, startingPoints } from "../data/startingPoints.ts"
 import { ACTIVITY_GROUPS } from "../data/sources.ts"
 import { groupLabel, sportLabel, transportLabel } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
-import { validateSearchTiming } from "../lib/slotMatch.ts"
+import { formatClock, parseClock, validateSearchTiming } from "../lib/slotMatch.ts"
 
 type HeroSearchProps = {
   value: SearchQuery
@@ -41,6 +41,26 @@ export function HeroSearch({
   const { language, t, text } = useI18n()
   const locationStatus = locating ? t("location.finding") : locationMessage
   const timingError = validateSearchTiming(value)
+  const [preset, setPreset] = useState<"now" | "evening" | "custom">("custom")
+
+  function applyNow() {
+    const now = new Date()
+    const fromMinutes = now.getHours() * 60 + now.getMinutes()
+    const from = formatClock(fromMinutes)
+    const untilMinutes = parseClock(value.availableUntil)
+    const proposed = Math.min(23 * 60 + 59, fromMinutes + 240)
+    const until =
+      untilMinutes !== null && untilMinutes > fromMinutes ? value.availableUntil : formatClock(proposed)
+    onChange({ ...value, availableFrom: from, availableUntil: until })
+    setPreset("now")
+  }
+
+  function applyEvening() {
+    const untilMinutes = parseClock(value.availableUntil)
+    const until = untilMinutes !== null && untilMinutes > 17 * 60 ? value.availableUntil : "21:00"
+    onChange({ ...value, availableFrom: "17:00", availableUntil: until })
+    setPreset("evening")
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -80,34 +100,61 @@ export function HeroSearch({
         <div className="search-grid">
           <fieldset>
             <legend>{t("when.legend")}</legend>
-            <div className="time-grid">
-              <label className="field" htmlFor="available-from">
-                {t("when.from")}
-                <input
-                  id="available-from"
-                  name="available-from"
-                  type="time"
-                  required
-                  value={value.availableFrom}
-                  onChange={(event) => onChange({ ...value, availableFrom: event.target.value })}
-                />
-              </label>
-              <label className="field" htmlFor="available-until">
-                {t("when.until")}
-                <input
-                  id="available-until"
-                  name="available-until"
-                  type="time"
-                  required
-                  value={value.availableUntil}
-                  onChange={(event) => onChange({ ...value, availableUntil: event.target.value })}
-                />
-              </label>
+            <div className="preset-row" role="group" aria-label={t("when.legend")}>
+              <button type="button" aria-pressed={preset === "now"} onClick={applyNow}>
+                {t("when.now")}
+              </button>
+              <button type="button" aria-pressed={preset === "evening"} onClick={applyEvening}>
+                {t("when.evening")}
+              </button>
+              <button type="button" aria-pressed={preset === "custom"} onClick={() => setPreset("custom")}>
+                {t("when.custom")}
+              </button>
             </div>
+            {preset === "custom" ? (
+              <div className="time-grid">
+                <label className="field" htmlFor="available-from">
+                  {t("when.from")}
+                  <input
+                    id="available-from"
+                    name="available-from"
+                    type="time"
+                    required
+                    value={value.availableFrom}
+                    onChange={(event) => {
+                      setPreset("custom")
+                      onChange({ ...value, availableFrom: event.target.value })
+                    }}
+                  />
+                </label>
+                <label className="field" htmlFor="available-until">
+                  {t("when.until")}
+                  <input
+                    id="available-until"
+                    name="available-until"
+                    type="time"
+                    required
+                    value={value.availableUntil}
+                    onChange={(event) => {
+                      setPreset("custom")
+                      onChange({ ...value, availableUntil: event.target.value })
+                    }}
+                  />
+                </label>
+              </div>
+            ) : (
+              <p className="field-note">
+                {t("when.applied", { from: value.availableFrom, until: value.availableUntil })}
+              </p>
+            )}
           </fieldset>
 
           <fieldset>
             <legend>{t("outing.legend")}</legend>
+            <details className="advanced-filters">
+              <summary>
+                {t("outing.advanced")} · {value.maxOutingMinutes} / {value.minWorkoutMinutes} min
+              </summary>
             <div className="time-grid">
               <label className="field" htmlFor="max-outing">
                 {t("outing.max")}
@@ -151,18 +198,17 @@ export function HeroSearch({
                 </select>
               </label>
             </div>
+            <p className="field-note">{t("outing.note")}</p>
+            <p className="field-note" id="ticket-hours">
+              {t("ticket.hours")}
+            </p>
+            <p className="field-note">{t("transport.note")}</p>
+            </details>
             {timingError ? (
               <p className="field-error" role="alert">
                 {text(timingError)}
               </p>
-            ) : (
-              <p className="field-note">
-                {t("outing.note")}
-              </p>
-            )}
-            <p className="field-note" id="ticket-hours">
-              {t("ticket.hours")}
-            </p>
+            ) : null}
           </fieldset>
 
           <fieldset>
@@ -187,9 +233,7 @@ export function HeroSearch({
                 )
               })}
             </div>
-            <p className="field-note">
-              {t("transport.note")}
-            </p>
+            <p className="field-note">{t("transport.short")}</p>
           </fieldset>
         </div>
 
@@ -222,6 +266,7 @@ export function HeroSearch({
             type="button"
             onClick={onUseLocation}
             disabled={locating}
+            aria-busy={locating}
             aria-describedby="location-status"
           >
             {t("location.use")}

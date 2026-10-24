@@ -4,12 +4,13 @@ import { useI18n } from "../i18n/useI18n.ts"
 type ExternalLinkProps = {
   href: string
   children: string
+  className?: string
 }
 
-export function ExternalLink({ href, children }: ExternalLinkProps) {
+export function ExternalLink({ href, children, className }: ExternalLinkProps) {
   const { t } = useI18n()
   return (
-    <a href={href} target="_blank" rel="noreferrer">
+    <a className={className} href={href} target="_blank" rel="noreferrer">
       {children}
       <span className="visually-hidden"> {t("link.newTab")}</span>
     </a>

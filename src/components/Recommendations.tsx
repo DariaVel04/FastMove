@@ -2,13 +2,14 @@ import type { MapOrigin, ScheduleNote, ScoredMatch, SortKey, TimeExclusion, Tran
 import { facilities, unmatchedTicketRooms } from "../data/facilities.ts"
 import { URLS } from "../data/sources.ts"
 import { countMatchingOptions, ticketCoverageLabel } from "../lib/present.ts"
-import { googleMapsDirectionsUrl } from "../lib/directions.ts"
+import { googleMapsDirectionsUrl, nysseJourneyUrl } from "../lib/directions.ts"
 import { straightLineKm } from "../lib/travel.ts"
 import { facilityTitle, localizedDistance } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
 import { ResultCard } from "./ResultCard.tsx"
+import { StatusBadge } from "./StatusBadge.tsx"
 
 type RecommendationsProps = {
   hasSearched: boolean
@@ -285,7 +286,11 @@ function OtherPlace({
         <button type="button" className="secondary-button" onClick={() => onShowOnMap(exclusion.facilityId)}>
           {t("link.showMap")}
         </button>
-        {facility ? <ExternalLink href={facility.infoUrl}>{t("link.city")}</ExternalLink> : null}
+        {facility ? (
+          <ExternalLink className="secondary-button" href={facility.infoUrl}>
+            {t("link.city")}
+          </ExternalLink>
+        ) : null}
       </div>
     </article>
   )
@@ -318,6 +323,13 @@ function OutingMiss({
             : null,
         )
       : null
+  const nysseUrl =
+    facility && directionsOrigin && transport === "public-transport"
+      ? nysseJourneyUrl(facility, {
+          latitude: directionsOrigin.latitude,
+          longitude: directionsOrigin.longitude,
+        })
+      : null
   const remaining =
     exclusion.bestRemainingMinutes < 0 ? 0 : exclusion.bestRemainingMinutes
   const distance =
@@ -330,12 +342,16 @@ function OutingMiss({
       id={`result-${exclusion.facilityId}`}
       className={selected ? "result-card result-card--selected" : "result-card"}
     >
-      <h3>{facility ? facilityTitle(facility.name, facility.localName, language) : exclusion.facilityName}</h3>
-      {facility ? <p className="ticket-status">{text(ticketCoverageLabel(facility.programme.sourceUrl))}</p> : null}
       <div className="card-topline">
+        <StatusBadge status="insufficient-time" />
         <p className="badge badge--data">{t("card.demo")}</p>
-        <p className="badge badge--schedule">{t("card.miss")}</p>
       </div>
+      <h3>
+        <button type="button" className="card-title-button" onClick={() => onShowOnMap(exclusion.facilityId)}>
+          {facility ? facilityTitle(facility.name, facility.localName, language) : exclusion.facilityName}
+        </button>
+      </h3>
+      {facility ? <p className="ticket-status">{text(ticketCoverageLabel(facility.programme.sourceUrl))}</p> : null}
       <p className="field-note">{t("card.demoNote")}</p>
       {facility ? (
         <p className="location">
@@ -357,7 +373,6 @@ function OutingMiss({
           <dd className="stat-note">{t("card.leftNote", { minutes: minWorkoutMinutes })}</dd>
         </div>
       </dl>
-      <DemoSchedule slots={exclusion.windowSlots} />
       <p className="data-status">{t("card.missExplain")}</p>
       <div className="card-actions">
         {directionsUrl ? (
@@ -369,8 +384,26 @@ function OutingMiss({
         <button type="button" className="secondary-button" onClick={() => onShowOnMap(exclusion.facilityId)}>
           {t("link.showMap")}
         </button>
-        {facility ? <ExternalLink href={facility.infoUrl}>{t("link.city")}</ExternalLink> : null}
+        {facility ? (
+          <ExternalLink className="secondary-button" href={URLS.timmiApp}>
+            {t("link.timmi")}
+          </ExternalLink>
+        ) : null}
+        {nysseUrl ? (
+          <ExternalLink className="secondary-button" href={nysseUrl}>
+            {t("link.nysse")}
+          </ExternalLink>
+        ) : null}
       </div>
+      <details className="score-details">
+        <summary>{t("card.whyMatch")}</summary>
+        <DemoSchedule slots={exclusion.windowSlots} />
+        {facility ? (
+          <ExternalLink className="secondary-button" href={facility.infoUrl}>
+            {t("link.city")}
+          </ExternalLink>
+        ) : null}
+      </details>
     </article>
   )
 }

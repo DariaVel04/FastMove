@@ -4,7 +4,8 @@ import { facilitiesForActivity, facilities, unmatchedTicketRooms } from "../data
 import { buildDemoSchedule, DEMO_SCHEDULE_PROFILES, describeDemoSlot, formatDemoDate, formatDemoRange, overlapsDailyWindow } from "../data/demoSchedule.ts"
 import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, DEMO_NOTICE, DEMO_SCHEDULE_NOTICE } from "../data/sources.ts"
 import { startingPoints } from "../data/startingPoints.ts"
-import { googleMapsDirectionsUrl } from "./directions.ts"
+import { googleMapsDirectionsUrl, nysseJourneyUrl } from "./directions.ts"
+import { cardStatus } from "./status.ts"
 import { LOCATION_COPY } from "./geolocation.ts"
 import { chooseNearestFittingDemo, findMatches } from "./match.ts"
 import { countMatchingOptions, foundOptionsLabel, matchSummaryLines, presentMatches, RESULT_DEMO_NOTE, ticketCoverageLabel } from "./present.ts"
@@ -443,6 +444,12 @@ export function runSelfCheck(): void {
       "directions use the LIPAS point",
     )
     assert(walking.searchParams.get("origin") === "61.498111,23.760222", "directions origin")
+    const nysse = nysseJourneyUrl(tesomaHall, origin)
+    assert(nysse !== null && nysse.startsWith("https://reittiopas.tampere.fi/"), "nysse planner host")
+    assert(nysse?.includes(String(tesomaHall.latitude)) === true, "nysse uses the facility coordinate")
+    assert(nysse?.includes("61.498111") === true, "nysse uses the selected origin")
+    assert(!nysse?.includes("api.digitransit.fi"), "nysse link does not call the routing API")
+    assert(nysseJourneyUrl(tesomaHall, null) === null, "nysse link needs an origin")
     const withoutOrigin = googleMapsDirectionsUrl(tesomaHall, "car", null)
     assert(withoutOrigin !== null && !new URL(withoutOrigin).searchParams.has("origin"), "origin is optional")
     const unverified = googleMapsDirectionsUrl(
@@ -1053,6 +1060,24 @@ function checkDemoSchedule(): void {
     assert(gymLines.some((line) => line.startsWith("Suggested workout:")), "gym card states the workout")
     assert(gymLines.some((line) => line.includes("in a straight line")), "gym card states the straight-line distance")
     assert(formatStraightLineDistance(naashalli.travel.straightLineKm) !== null, "Nääshalli distance uses both coordinates")
+    assert(cardStatus(naashalli) === "potential", "a fitting ticket demo is a potential match")
+    assert(
+      cardStatus({ ...naashalli, slot: null, timeFit: { ...naashalli.timeFit, sessionKnown: false } }) ===
+        "no-demo-slot",
+      "a missing schedule is not marked insufficient",
+    )
+    assert(translate("en", "status.potential") === "Potential match", "potential match label")
+    assert(translate("fi", "status.potential") === "Mahdollinen vaihtoehto", "Finnish potential match label")
+    assert(translate("fi", "status.time") === "Aika ei riitä", "Finnish insufficient time label")
+    assert(translate("fi", "card.whyMatch") === "Miksi tämä sopii?", "Finnish match explanation label")
+  }
+  const stadiumCaution = centerGym.visitCautions.find((result) => result.activity.dropInLimited)
+  assert(stadiumCaution !== undefined && cardStatus(stadiumCaution) === "check-access", "limited drop-in needs an access check")
+  if (naashalli) {
+    assert(
+      cardStatus({ ...naashalli, timeFit: { ...naashalli.timeFit, fits: false } }) === "insufficient-time",
+      "a short workout budget is insufficient time",
+    )
   }
   const centerBasketball = findMatches(
     {

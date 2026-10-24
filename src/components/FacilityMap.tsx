@@ -1,16 +1,23 @@
 import { useEffect, useRef } from "react"
+import { CircleMarker as LeafletCircleMarker } from "leaflet"
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet"
-import type { Facility, MapOrigin, ScoredMatch } from "../domain/types.ts"
+import type { Facility, MapOrigin, ScoredMatch, TransportMode } from "../domain/types.ts"
 import { facilities } from "../data/facilities.ts"
 import { clockMinutes } from "../data/demoSchedule.ts"
+import { URLS } from "../data/sources.ts"
 import { facilityTitle, formatLocalizedClock, formatLocalizedDemoDate } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
 import type { Language } from "../i18n/types.ts"
 import type { MessageKey } from "../i18n/translations.ts"
+import { googleMapsDirectionsUrl, nysseJourneyUrl } from "../lib/directions.ts"
+import { ExternalLink } from "./ExternalLink.tsx"
 
 type FacilityMapProps = {
   start: MapOrigin | null
   results: ScoredMatch[]
+  linked: ScoredMatch[]
+  transport: TransportMode
+  focusTick: number
   selectedFacilityId: string | null
   hasSearched: boolean
   onSelect: (facilityId: string) => void
@@ -59,6 +66,9 @@ export function FacilityMap(props: FacilityMapProps) {
 function MapCanvas({
   start,
   results,
+  linked,
+  transport,
+  focusTick,
   selectedFacilityId,
   hasSearched,
   onSelect,
@@ -75,7 +85,14 @@ function MapCanvas({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <MapController start={start} results={results} hasSearched={hasSearched} refitKey={refitKey} selectedFacilityId={selectedFacilityId} />
+      <MapController
+        start={start}
+        results={results}
+        hasSearched={hasSearched}
+        refitKey={refitKey}
+        selectedFacilityId={selectedFacilityId}
+        focusTick={focusTick}
+      />
       {start ? (
         <CircleMarker
           center={[start.latitude, start.longitude]}
@@ -89,11 +106,15 @@ function MapCanvas({
       ) : null}
       {facilities.map((facility) => {
         const match = results.find((result) => result.facility.id === facility.id)
+        const linkedMatch = linked.find((result) => result.facility.id === facility.id) ?? match
         return (
           <FacilityMarker
             key={facility.id}
             facility={facility}
             match={match}
+            linkedMatch={linkedMatch}
+            start={start}
+            transport={transport}
             selected={selectedFacilityId === facility.id}
             onSelect={onSelect}
           />
@@ -159,16 +180,29 @@ function markerWhen(match: ScoredMatch | undefined, language: Language): string 
 function FacilityMarker({
   facility,
   match,
+  linkedMatch,
+  start,
+  transport,
   selected,
   onSelect,
 }: {
   facility: Facility
   match: ScoredMatch | undefined
+  linkedMatch: ScoredMatch | undefined
+  start: MapOrigin | null
+  transport: TransportMode
   selected: boolean
   onSelect: (facilityId: string) => void
 }) {
   const { language, t, text } = useI18n()
-  const when = markerWhen(match, language)
+  const popupMatch = linkedMatch ?? match
+  const when = markerWhen(popupMatch, language)
+  const origin = start ? { latitude: start.latitude, longitude: start.longitude } : null
+  const mode = popupMatch?.travel.mode ?? transport
+  const directionsUrl = googleMapsDirectionsUrl(facility, mode, origin)
+  const nysseUrl = mode === "public-transport" ? nysseJourneyUrl(facility, origin) : null
+  const timmiUrl = popupMatch?.activity.timmiUrl ?? URLS.timmiApp
+  const room = popupMatch ? text(popupMatch.activity.spaceName) : null
   const demoMatch = match?.slot?.provenance.status === "demonstration"
   const isDemoHighlight = demoMatch === true && match?.isBest === true
   const fillColor = isDemoHighlight ? "#d8f25a" : demoMatch ? "#1e5340" : "#c8bfb2"
@@ -178,23 +212,49 @@ function FacilityMarker({
     <CircleMarker
       center={[facility.latitude, facility.longitude]}
       radius={radius}
-      pathOptions={{ color: "#14382c", weight: 2, fillColor, fillOpacity: 1 }}
+      pathOptions={{ color: selected ? "#d8f25a" : "#14382c", weight: selected ? 4 : 2, fillColor, fillOpacity: 1 }}
       eventHandlers={{ click: () => onSelect(facility.id) }}
     >
-      <Popup>
+      <Popup maxWidth={220} autoPan keepInView autoPanPadding={[12, 12]}>
         <strong>{facilityTitle(facility.name, facility.localName, language)}</strong>
         <br />
         {facility.address}
         <br />
+        {room ? (
+          <>
+            {t("map.room", { room })}
+            <br />
+          </>
+        ) : null}
         {when ? (
           <>
             {t("map.demoInterval", { when })}
             <br />
+            {t("card.demo")}
+            <br />
           </>
         ) : null}
+        {t("map.notLive")}
+        <br />
         {text(facility.coordinateSource.note)}
         <br />
-        {describeMarker(facility, match, t, text)}
+        {describeMarker(facility, popupMatch, t, text)}
+        <br />
+        <ExternalLink href={timmiUrl}>
+          {popupMatch?.activity.timmiUrl ? t("link.timmiRoom") : t("link.timmi")}
+        </ExternalLink>
+        {directionsUrl ? (
+          <>
+            <br />
+            <ExternalLink href={directionsUrl}>{t("link.directions")}</ExternalLink>
+          </>
+        ) : null}
+        {nysseUrl ? (
+          <>
+            <br />
+            <ExternalLink href={nysseUrl}>{t("link.nysse")}</ExternalLink>
+          </>
+        ) : null}
       </Popup>
     </CircleMarker>
   )
@@ -206,12 +266,14 @@ function MapController({
   hasSearched,
   refitKey,
   selectedFacilityId,
+  focusTick,
 }: {
   start: MapOrigin | null
   results: ScoredMatch[]
   hasSearched: boolean
   refitKey: string
   selectedFacilityId: string | null
+  focusTick: number
 }) {
   const map = useMap()
   const { t } = useI18n()
@@ -248,11 +310,18 @@ function MapController({
   }, [hasSearched, map, refitKey, results, start])
 
   useEffect(() => {
-    if (!selectedFacilityId) return
+    if (!selectedFacilityId || focusTick === 0) return
     const facility = facilities.find((item) => item.id === selectedFacilityId)
     if (!facility) return
-    map.panTo([facility.latitude, facility.longitude])
-  }, [map, selectedFacilityId])
+    map.flyTo([facility.latitude, facility.longitude], Math.max(map.getZoom(), 15), { animate: false })
+    map.eachLayer((layer) => {
+      if (!(layer instanceof LeafletCircleMarker)) return
+      const at = layer.getLatLng()
+      const same =
+        Math.abs(at.lat - facility.latitude) < 0.00001 && Math.abs(at.lng - facility.longitude) < 0.00001
+      if (same) layer.openPopup()
+    })
+  }, [focusTick, map, selectedFacilityId])
 
   return null
 }

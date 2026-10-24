@@ -50,3 +50,22 @@ export function googleMapsDirectionsUrl(
   }
   return `${GOOGLE_DIRECTIONS}?${params.toString()}`
 }
+
+/**
+ * Opens Nysse's public journey planner. The path form is the one used by
+ * https://reittiopas.tampere.fi (label::lat,lon). Coordinates come only from
+ * the selected start and a LIPAS facility point. This does not call the
+ * Digitransit routing API and does not invent a route.
+ */
+export function nysseJourneyUrl(facility: Facility, origin: Origin | null): string | null {
+  if (!origin || !finitePair(origin.latitude, origin.longitude)) return null
+  if (
+    facility.coordinateSource.provider !== "LIPAS" ||
+    !finitePair(facility.latitude, facility.longitude)
+  ) {
+    return null
+  }
+  const from = `::${origin.latitude},${origin.longitude}`
+  const to = `::${facility.latitude},${facility.longitude}`
+  return `https://reittiopas.tampere.fi/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
+}
