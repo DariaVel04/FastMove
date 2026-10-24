@@ -12,12 +12,20 @@ import { SCORE_WEIGHTS } from "./scoring.ts"
 import { assessSlotAttendance, formatClock, parseClock, validateSearchTiming } from "./slotMatch.ts"
 import { assessTimeFit, MIN_EXERCISE_MINUTES } from "./timefit.ts"
 import { estimateTravel, formatStraightLineDistance, TRAVEL_MODEL } from "./travel.ts"
+import { missingPhrases } from "../i18n/coverage.ts"
+import { translate } from "../i18n/translations.ts"
+import { readStoredLanguage } from "../i18n/types.ts"
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
 }
 
 export function runSelfCheck(): void {
+  const missing = missingPhrases()
+  assert(missing.length === 0, `Finnish phrase missing: ${missing[0] ?? ""}`)
+  assert(readStoredLanguage() === "en", "a missing stored language stays English")
+  assert(translate("en", "results.foundMany", { count: 2 }) === "Found 2 matching options", "English result count stays")
+  assert(translate("fi", "search.ready") === "Etsi sopivia paikkoja", "Finnish search label")
   const weightSum =
     SCORE_WEIGHTS.travelConvenience + SCORE_WEIGHTS.timeFit + SCORE_WEIGHTS.dataConfidence
   assert(Math.abs(weightSum - 1) < 0.0001, "score weights must sum to 1")

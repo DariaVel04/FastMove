@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react"
 import type { MapOrigin, SearchQuery, SortKey } from "./domain/types.ts"
 import { startingPoints } from "./data/startingPoints.ts"
-import { LOCATION_COPY, requestCurrentLocation } from "./lib/geolocation.ts"
-import { describeActivityGap, describeTimeExclusions, findMatches } from "./lib/match.ts"
+import { requestCurrentLocation } from "./lib/geolocation.ts"
+import { localizedActivityGap, localizedExclusionText } from "./i18n/display.ts"
+import { useI18n } from "./i18n/useI18n.ts"
+import { findMatches } from "./lib/match.ts"
 import { presentMatches } from "./lib/present.ts"
 import { validateSearchTiming } from "./lib/slotMatch.ts"
 import { Footer } from "./components/Footer.tsx"
@@ -28,6 +30,13 @@ type SubmittedSearch = {
   origin: MapOrigin
 }
 
+type LocationCode = "needed" | "granted" | "denied" | "unavailable" | "timeout" | "unsupported"
+
+type LocationFeedback = {
+  code: LocationCode
+  keptPrevious: boolean
+}
+
 function deviceOrigin(fix: { latitude: number; longitude: number }, generation: number): MapOrigin {
   return {
     id: `device-${generation}`,
@@ -41,6 +50,7 @@ function deviceOrigin(fix: { latitude: number; longitude: number }, generation: 
 }
 
 export default function App() {
+  const { t, language } = useI18n()
   const [query, setQuery] = useState<SearchQuery>(initialQuery)
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null)
   const [sort, setSort] = useState<SortKey>("relevance")
@@ -48,7 +58,10 @@ export default function App() {
   const [deviceFix, setDeviceFix] = useState<{ latitude: number; longitude: number } | null>(null)
   const [locationGeneration, setLocationGeneration] = useState(0)
   const [locating, setLocating] = useState(false)
-  const [locationMessage, setLocationMessage] = useState<string>(LOCATION_COPY.needed)
+  const [locationFeedback, setLocationFeedback] = useState<LocationFeedback>({
+    code: "needed",
+    keptPrevious: false,
+  })
   const [manualStartId, setManualStartId] = useState<string | null>(null)
 
   const formOrigin = deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
@@ -125,38 +138,49 @@ export default function App() {
     const result = await requestCurrentLocation()
     setLocating(false)
     if (result.status !== "granted") {
-      const problem = LOCATION_COPY[result.status]
-      setLocationMessage(
-        deviceFix ? `${problem} The last enabled location is still used for search.` : problem,
-      )
+      setLocationFeedback({ code: result.status, keptPrevious: deviceFix !== null })
       return deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
     }
     const fix = { latitude: result.latitude, longitude: result.longitude }
     const nextGeneration = locationGeneration + 1
     setDeviceFix(fix)
     setLocationGeneration(nextGeneration)
-    setLocationMessage(LOCATION_COPY.granted)
+    setLocationFeedback({ code: "granted", keptPrevious: false })
     return deviceOrigin(fix, nextGeneration)
   }
 
+  const locationMessage = `${t(
+    locationFeedback.code === "needed"
+      ? "location.needed"
+      : locationFeedback.code === "granted"
+        ? "location.granted"
+        : locationFeedback.code === "denied"
+          ? "location.denied"
+          : locationFeedback.code === "timeout"
+            ? "location.timeout"
+            : locationFeedback.code === "unsupported"
+              ? "location.unsupported"
+              : "location.unavailable",
+  )}${locationFeedback.keptPrevious ? ` ${t("location.kept")}` : ""}`
   const timeExclusionText =
     submitted && outcome
-      ? describeTimeExclusions(
+      ? localizedExclusionText(
           outcome.timeExclusions,
           submitted.query.activityId,
           submitted.query.maxOutingMinutes,
           submitted.query.minWorkoutMinutes,
+          language,
         )
       : null
   const activityGapText =
     submitted && outcome && outcome.activitySupportedCount === 0
-      ? describeActivityGap(submitted.query.activityId)
+      ? localizedActivityGap(submitted.query.activityId, language)
       : null
 
   return (
     <div id="top">
       <a className="skip-link" href="#explore">
-        Skip to search
+        {t("skip")}
       </a>
       <Header />
       <main>

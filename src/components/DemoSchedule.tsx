@@ -1,5 +1,7 @@
 import type { DemoSlot } from "../domain/types.ts"
-import { demoStatusLabel, formatDemoDate, formatDemoRange } from "../data/demoSchedule.ts"
+import { clockMinutes, formatDemoRange } from "../data/demoSchedule.ts"
+import { demoStatusText, formatLocalizedClock, formatLocalizedDemoDate } from "../i18n/display.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 
 type DemoScheduleProps = {
   slots: DemoSlot[]
@@ -7,11 +9,12 @@ type DemoScheduleProps = {
 }
 
 export function DemoSchedule({ slots, selectedId = null }: DemoScheduleProps) {
+  const { language, t, text } = useI18n()
   const conditions = slots.find((slot) => slot.conditionsNote)?.conditionsNote ?? null
   return (
-    <section className="demo-schedule" aria-label="Demo schedule">
+    <section className="demo-schedule" aria-label={t("schedule.label")}>
       {slots.length === 0 ? (
-        <p className="field-note">No demo slots fall inside this time window. Widen the hours you are free.</p>
+        <p className="field-note">{t("schedule.empty")}</p>
       ) : (
         <ul className="demo-slot-list">
           {slots.map((slot) => (
@@ -25,17 +28,21 @@ export function DemoSchedule({ slots, selectedId = null }: DemoScheduleProps) {
                 .filter(Boolean)
                 .join(" ")}
             >
-              <span className="demo-slot-date">{formatDemoDate(slot.startTime)}</span>
-              <span className="demo-slot-time">{formatDemoRange(slot)}</span>
-              <span className="demo-slot-activity">
-                {slot.spaceName} · {slot.durationMinutes} min
+              <span className="demo-slot-date">{formatLocalizedDemoDate(slot.startTime, language)}</span>
+              <span className="demo-slot-time">
+                {language === "en"
+                  ? formatDemoRange(slot)
+                  : `${formatLocalizedClock(clockMinutes(slot.startTime), language)}–${formatLocalizedClock(clockMinutes(slot.endTime), language)}`}
               </span>
-              <span className="demo-slot-status">{demoStatusLabel(slot.status)}</span>
+              <span className="demo-slot-activity">
+                {text(slot.spaceName)} · {slot.durationMinutes} min
+              </span>
+              <span className="demo-slot-status">{demoStatusText(slot.status, language)}</span>
             </li>
           ))}
         </ul>
       )}
-      {conditions ? <p className="field-note">{conditions}</p> : null}
+      {conditions ? <p className="field-note">{text(conditions)}</p> : null}
     </section>
   )
 }

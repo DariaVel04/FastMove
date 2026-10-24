@@ -1,9 +1,11 @@
 import type { MapOrigin, ScheduleNote, ScoredMatch, SortKey, TimeExclusion, TransportMode } from "../domain/types.ts"
 import { facilities, unmatchedTicketRooms } from "../data/facilities.ts"
 import { URLS } from "../data/sources.ts"
-import { countMatchingOptions, DEMO_CARD_NOTE, foundOptionsLabel, RESULT_DEMO_NOTE, ticketCoverageLabel } from "../lib/present.ts"
+import { countMatchingOptions, ticketCoverageLabel } from "../lib/present.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
-import { formatStraightLineDistance, straightLineKm } from "../lib/travel.ts"
+import { straightLineKm } from "../lib/travel.ts"
+import { facilityTitle, localizedDistance } from "../i18n/display.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
 import { ResultCard } from "./ResultCard.tsx"
@@ -41,6 +43,7 @@ export function Recommendations({
   onShowOnMap,
   directionsOrigin,
 }: RecommendationsProps) {
+  const { language, t, text } = useI18n()
   const onTicket = (sourceUrl: string | undefined) =>
     ticketCoverageLabel(sourceUrl) === "Liikkuva Tampere ticket"
   const examples = visible.filter(
@@ -62,44 +65,42 @@ export function Recommendations({
   return (
     <section id="results" className="results" aria-labelledby="results-title" aria-live="polite">
       <div className="section-heading">
-        <h2 id="results-title">Recommendations</h2>
-        <p>Places that match the hours, outing and workout you entered.</p>
+        <h2 id="results-title">{t("results.title")}</h2>
+        <p>{t("results.subtitle")}</p>
       </div>
 
       {!hasSearched ? (
         <div className="empty-state">
-          <h3>Your matches will appear here.</h3>
-          <p>
-            Choose a sport, the hours you are free, how long the outing can be and the shortest
-            workout you want. Then use your location or a saved start point. Results use illustrative
-            schedules, not live bookings.
-          </p>
+          <h3>{t("results.waitingTitle")}</h3>
+          <p>{t("results.waitingBody")}</p>
         </div>
       ) : (
         <>
-          <p className="found-options">{foundOptionsLabel(matchCount)}</p>
-          <p className="demo-notice">{RESULT_DEMO_NOTE}</p>
+          <p className="found-options">
+            {matchCount === 1 ? t("results.foundOne") : t("results.foundMany", { count: matchCount })}
+          </p>
+          <p className="demo-notice">{t("results.demo")}</p>
           <div className="result-controls">
             <label className="field field--inline" htmlFor="sort-results">
-              Sort
+              {t("results.sort")}
               <select
                 id="sort-results"
                 value={sort}
                 onChange={(event) => onSortChange(event.target.value as SortKey)}
               >
-                <option value="relevance">Relevance</option>
-                <option value="travel">Shortest travel</option>
+                <option value="relevance">{t("results.relevance")}</option>
+                <option value="travel">{t("results.travel")}</option>
               </select>
             </label>
           </div>
 
           {matchCount === 0 ? (
             <div className="empty-state" role="status">
-              <p>No demo interval fits this search. This does not mean the facilities are fully booked.</p>
+              <p>{t("results.empty")}</p>
               {activityGapText ? <p>{activityGapText}</p> : null}
               <p className="link-row">
-                <ExternalLink href={URLS.timmiApp}>Open the Timmi calendar</ExternalLink>
-                <ExternalLink href={URLS.ticket}>Liikkuva Tampere ticket page</ExternalLink>
+                <ExternalLink href={URLS.timmiApp}>{t("link.timmi")}</ExternalLink>
+                <ExternalLink href={URLS.ticket}>{t("link.ticketPage")}</ExternalLink>
               </p>
             </div>
           ) : (
@@ -118,11 +119,8 @@ export function Recommendations({
 
           {unconfirmed.length > 0 ? (
             <div className="result-group">
-              <h3>Schedules not loaded</h3>
-              <p className="field-note">
-                These places support the activity in the city sources, but FastMove has no loaded
-                session for them. Check the linked page before you go.
-              </p>
+              <h3>{t("results.unconfirmedTitle")}</h3>
+              <p className="field-note">{t("results.unconfirmedBody")}</p>
               <div className="result-list">
                 {unconfirmed.map((result) => (
                   <ResultCard
@@ -139,10 +137,8 @@ export function Recommendations({
 
           {visitCautions.length > 0 ? (
             <div className="result-group">
-              <h3>Not a standard drop-in</h3>
-              <p className="field-note">
-                The city page limits who can use this room. It is not listed as a normal suggestion.
-              </p>
+              <h3>{t("results.cautionTitle")}</h3>
+              <p className="field-note">{t("results.cautionBody")}</p>
               <div className="result-list">
                 {visitCautions.map((result) => (
                   <ResultCard
@@ -159,11 +155,8 @@ export function Recommendations({
 
           {ticketExclusions.length > 0 ? (
             <div className="result-group">
-              <h3>Outside this outing</h3>
-              <p className="field-note">
-                These places support the selected sport. The estimated journey does not leave{" "}
-                {minWorkoutMinutes} minutes to exercise. This is not a full booking calendar.
-              </p>
+              <h3>{t("results.outsideTitle")}</h3>
+              <p className="field-note">{t("results.outsideBody", { minutes: minWorkoutMinutes })}</p>
               <div className="result-list">
                 {ticketExclusions.map((exclusion) => (
                   <OutingMiss
@@ -182,11 +175,8 @@ export function Recommendations({
 
           {otherPlaces.length > 0 || otherExclusions.length > 0 ? (
             <div className="result-group">
-              <h3>Other places, not covered by this ticket</h3>
-              <p className="field-note">
-                These places are in the city sources. They are not Liikkuva Tampere ticket rooms, and
-                FastMove does not invent a free session for them.
-              </p>
+              <h3>{t("results.otherTitle")}</h3>
+              <p className="field-note">{t("results.otherBody")}</p>
               <div className="result-list">
                 {otherPlaces.map((result) => (
                   <ResultCard
@@ -214,25 +204,25 @@ export function Recommendations({
           {timeExclusionText ? <p className="exclusion-note">{timeExclusionText}</p> : null}
           {scheduleNotes.map((note) => (
             <p className="exclusion-note" key={note.facilityId}>
-              {note.message}
+              {text(note.message)}
             </p>
           ))}
         </>
       )}
       <section className="unmatched-rooms" aria-labelledby="unmatched-title">
-        <h3 id="unmatched-title">Ticket facilities not yet matched</h3>
-        <p className="field-note">
-          These rooms are named in the project’s ticket records. FastMove has no confirmed sport,
-          room match or coordinate for them, so they are not suggested.
-        </p>
+        <h3 id="unmatched-title">{t("results.unmatchedTitle")}</h3>
+        <p className="field-note">{t("results.unmatchedBody")}</p>
         <ul className="unmatched-list">
-          {unmatchedTicketRooms.map((room) => (
-            <li key={`${room.facilityName}-${room.room}`}>
-              <strong>{room.facilityName}</strong>
-              <span>{room.room}</span>
-              <span>{room.reason}</span>
-            </li>
-          ))}
+          {unmatchedTicketRooms.map((room) => {
+            const place = facilities.find((item) => item.name === room.facilityName)
+            return (
+              <li key={`${room.facilityName}-${room.room}`}>
+                <strong>{place ? facilityTitle(place.name, place.localName, language) : room.facilityName}</strong>
+                <span>{text(room.room)}</span>
+                <span>{text(room.reason)}</span>
+              </li>
+            )
+          })}
         </ul>
       </section>
     </section>
@@ -252,10 +242,11 @@ function OtherPlace({
   selected: boolean
   onShowOnMap: (facilityId: string) => void
 }) {
+  const { language, t, text } = useI18n()
   const facility = facilities.find((item) => item.id === exclusion.facilityId)
   const distance =
     facility && directionsOrigin
-      ? formatStraightLineDistance(straightLineKm(directionsOrigin, facility))
+      ? localizedDistance(straightLineKm(directionsOrigin, facility), language)
       : null
   const directionsUrl =
     facility && transport
@@ -273,31 +264,28 @@ function OtherPlace({
       id={`result-${exclusion.facilityId}`}
       className={selected ? "result-card result-card--selected" : "result-card"}
     >
-      <h3>{exclusion.facilityName}</h3>
-      <p className="ticket-status">Not covered by this ticket</p>
+      <h3>{facility ? facilityTitle(facility.name, facility.localName, language) : exclusion.facilityName}</h3>
+      <p className="ticket-status">{text("Not covered by this ticket")}</p>
       {facility?.schedule.state === "seasonal-check" ? (
-        <p className="field-note">{facility.schedule.detail}</p>
+        <p className="field-note">{text(facility.schedule.detail)}</p>
       ) : (
-        <p className="field-note">
-          {facility?.schedule.detail ?? "Session times are not loaded. FastMove does not invent a free session."}
-        </p>
+        <p className="field-note">{facility ? text(facility.schedule.detail) : t("card.noSession")}</p>
       )}
       <p className="field-note">
         {distance ? `${distance}. ` : null}
-        Estimated travel: {exclusion.outboundMinutes} min out, {exclusion.returnMinutes} min back. Not a
-        routed journey.
+        {t("card.travelSplit", { out: exclusion.outboundMinutes, back: exclusion.returnMinutes })}
       </p>
       <div className="card-actions">
         {directionsUrl ? (
           <a className="directions-button" href={directionsUrl} target="_blank" rel="noreferrer">
-            Get directions
-            <span className="visually-hidden"> (opens in a new tab)</span>
+            {t("link.directions")}
+            <span className="visually-hidden"> {t("link.newTab")}</span>
           </a>
         ) : null}
         <button type="button" className="secondary-button" onClick={() => onShowOnMap(exclusion.facilityId)}>
-          Show on map
+          {t("link.showMap")}
         </button>
-        {facility ? <ExternalLink href={facility.infoUrl}>City of Tampere page</ExternalLink> : null}
+        {facility ? <ExternalLink href={facility.infoUrl}>{t("link.city")}</ExternalLink> : null}
       </div>
     </article>
   )
@@ -318,6 +306,7 @@ function OutingMiss({
   selected: boolean
   onShowOnMap: (facilityId: string) => void
 }) {
+  const { language, t, text } = useI18n()
   const facility = facilities.find((item) => item.id === exclusion.facilityId)
   const directionsUrl =
     facility && transport
@@ -333,7 +322,7 @@ function OutingMiss({
     exclusion.bestRemainingMinutes < 0 ? 0 : exclusion.bestRemainingMinutes
   const distance =
     facility && directionsOrigin
-      ? formatStraightLineDistance(straightLineKm(directionsOrigin, facility))
+      ? localizedDistance(straightLineKm(directionsOrigin, facility), language)
       : null
 
   return (
@@ -341,13 +330,13 @@ function OutingMiss({
       id={`result-${exclusion.facilityId}`}
       className={selected ? "result-card result-card--selected" : "result-card"}
     >
-      <h3>{exclusion.facilityName}</h3>
-      {facility ? <p className="ticket-status">{ticketCoverageLabel(facility.programme.sourceUrl)}</p> : null}
+      <h3>{facility ? facilityTitle(facility.name, facility.localName, language) : exclusion.facilityName}</h3>
+      {facility ? <p className="ticket-status">{text(ticketCoverageLabel(facility.programme.sourceUrl))}</p> : null}
       <div className="card-topline">
-        <p className="badge badge--data">DEMO DATA</p>
-        <p className="badge badge--schedule">Does not fit this outing</p>
+        <p className="badge badge--data">{t("card.demo")}</p>
+        <p className="badge badge--schedule">{t("card.miss")}</p>
       </div>
-      <p className="field-note">{DEMO_CARD_NOTE}</p>
+      <p className="field-note">{t("card.demoNote")}</p>
       {facility ? (
         <p className="location">
           {facility.area} · {facility.address}
@@ -355,39 +344,32 @@ function OutingMiss({
       ) : null}
       <dl className="stats">
         <div>
-          <dt>Travel</dt>
+          <dt>{t("card.travelTitle")}</dt>
           <dd>
             {distance ? `${distance}. ` : null}
-            {exclusion.outboundMinutes} min out, {exclusion.returnMinutes} min back
+            {t("card.travelOut", { out: exclusion.outboundMinutes, back: exclusion.returnMinutes })}
           </dd>
-          <dd className="stat-note">
-            {distance
-              ? "Approximate straight-line distance. Demonstration travel estimate. Not a routed journey."
-              : "Demonstration travel estimate. Not a routed journey."}
-          </dd>
+          <dd className="stat-note">{distance ? t("card.distanceNote") : t("card.travelNote")}</dd>
         </div>
         <div>
-          <dt>Time left to exercise</dt>
-          <dd>{remaining} min</dd>
-          <dd className="stat-note">Minimum workout is {minWorkoutMinutes} min</dd>
+          <dt>{t("card.leftTitle")}</dt>
+          <dd>{t("workout.option", { minutes: remaining })}</dd>
+          <dd className="stat-note">{t("card.leftNote", { minutes: minWorkoutMinutes })}</dd>
         </div>
       </dl>
       <DemoSchedule slots={exclusion.windowSlots} />
-      <p className="data-status">
-        No demo-available slot in this window fits the outing. Raise the maximum outing, or lower the
-        minimum workout, if this journey should be included. This is not a live booking calendar.
-      </p>
+      <p className="data-status">{t("card.missExplain")}</p>
       <div className="card-actions">
         {directionsUrl ? (
           <a className="directions-button" href={directionsUrl} target="_blank" rel="noreferrer">
-            Get directions
-            <span className="visually-hidden"> (opens in a new tab)</span>
+            {t("link.directions")}
+            <span className="visually-hidden"> {t("link.newTab")}</span>
           </a>
         ) : null}
         <button type="button" className="secondary-button" onClick={() => onShowOnMap(exclusion.facilityId)}>
-          Show on map
+          {t("link.showMap")}
         </button>
-        {facility ? <ExternalLink href={facility.infoUrl}>City of Tampere page</ExternalLink> : null}
+        {facility ? <ExternalLink href={facility.infoUrl}>{t("link.city")}</ExternalLink> : null}
       </div>
     </article>
   )

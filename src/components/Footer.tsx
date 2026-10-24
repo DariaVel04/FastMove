@@ -1,28 +1,26 @@
-import { DEMO_NOTICE, URLS } from "../data/sources.ts"
+import { URLS } from "../data/sources.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 
 export function Footer() {
+  const { t } = useI18n()
   return (
     <footer className="site-footer">
       <div className="shell footer-inner">
         <div>
           <p className="footer-brand">FastMove</p>
-          <p>Find your spot. Make your move.</p>
+          <p>{t("footer.tagline")}</p>
         </div>
-        <p>{DEMO_NOTICE}</p>
-        <p>
-          Facility coordinates are from LIPAS. The Tampere open-data portal does not publish these
-          indoor halls. Its swimming-hall and outdoor-field datasets were checked and not used.
-          Timmi availability is not read by this app.
-        </p>
+        <p>{t("trust.notice")}</p>
+        <p>{t("footer.sources")}</p>
         <p className="link-row">
-          <ExternalLink href={URLS.ticket}>Liikkuva Tampere ticket</ExternalLink>
-          <ExternalLink href={URLS.ticketEnglish}>English ticket page</ExternalLink>
-          <ExternalLink href={URLS.timmiApp}>Timmi calendar</ExternalLink>
-          <ExternalLink href={URLS.timmiGuide}>Timmi guide</ExternalLink>
-          <ExternalLink href={URLS.sportsShop}>Sports online shop</ExternalLink>
-          <ExternalLink href={URLS.lipas}>LIPAS sports facilities</ExternalLink>
-          <ExternalLink href={URLS.openData}>Tampere open data</ExternalLink>
+          <ExternalLink href={URLS.ticket}>{t("link.ticketShort")}</ExternalLink>
+          <ExternalLink href={URLS.ticketEnglish}>{t("link.ticketEnglish")}</ExternalLink>
+          <ExternalLink href={URLS.timmiApp}>{t("link.timmiCalendar")}</ExternalLink>
+          <ExternalLink href={URLS.timmiGuide}>{t("link.timmiGuideShort")}</ExternalLink>
+          <ExternalLink href={URLS.sportsShop}>{t("link.shop")}</ExternalLink>
+          <ExternalLink href={URLS.lipas}>{t("link.lipas")}</ExternalLink>
+          <ExternalLink href={URLS.openData}>{t("link.openData")}</ExternalLink>
         </p>
       </div>
     </footer>

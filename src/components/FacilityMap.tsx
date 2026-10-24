@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react"
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet"
 import type { Facility, MapOrigin, ScoredMatch } from "../domain/types.ts"
 import { facilities } from "../data/facilities.ts"
+import { clockMinutes } from "../data/demoSchedule.ts"
+import { facilityTitle, formatLocalizedClock, formatLocalizedDemoDate } from "../i18n/display.ts"
+import { useI18n } from "../i18n/useI18n.ts"
+import type { Language } from "../i18n/types.ts"
+import type { MessageKey } from "../i18n/translations.ts"
 
 type FacilityMapProps = {
   start: MapOrigin | null
@@ -16,6 +21,7 @@ type MapCanvasProps = FacilityMapProps & {
 }
 
 export function FacilityMap(props: FacilityMapProps) {
+  const { t } = useI18n()
   const refitKey = `${props.hasSearched ? "searched" : "browse"}:${props.start?.id ?? "none"}:${props.results
     .map((result) => result.facility.id)
     .join(",")}`
@@ -23,8 +29,8 @@ export function FacilityMap(props: FacilityMapProps) {
   return (
     <section className="map-section" aria-labelledby="map-title">
       <div className="section-heading">
-        <h2 id="map-title">Map</h2>
-        <p>Listed halls, pools and ice places. Matches are highlighted after a search.</p>
+        <h2 id="map-title">{t("map.title")}</h2>
+        <p>{t("map.intro")}</p>
       </div>
       <div className="map-frame">
         <MapCanvas {...props} refitKey={refitKey} />
@@ -32,28 +38,20 @@ export function FacilityMap(props: FacilityMapProps) {
       <ul className="legend">
         {props.start ? (
           <li>
-            <span className="swatch swatch--start" /> Your location
+            <span className="swatch swatch--start" /> {t("map.start")}
           </li>
         ) : null}
         <li>
-          <span className="swatch swatch--best" /> Demo match
+          <span className="swatch swatch--best" /> {t("map.demo")}
         </li>
         <li>
-          <span className="swatch swatch--match" /> Other match
+          <span className="swatch swatch--match" /> {t("map.other")}
         </li>
         <li>
-          <span className="swatch swatch--idle" /> Listed place
+          <span className="swatch swatch--idle" /> {t("map.listed")}
         </li>
       </ul>
-      <p className="map-note">
-        Interactive OpenStreetMap base map. Facility pins are LIPAS points retrieved on 24 October
-        2026 under CC BY 4.0. They are facility points, not surveyed doors, and LIPAS does not
-        confirm Liikkuva Tampere eligibility or live availability. Your location is shown only
-        after you ask for it, and its coordinates are not printed. Travel lines are not drawn.
-        Walking, cycling, public
-        transport and car times are demonstration estimates, not live navigation. The car estimate
-        does not include parking.
-      </p>
+      <p className="map-note">{t("map.note")}</p>
     </section>
   )
 }
@@ -85,11 +83,7 @@ function MapCanvas({
           pathOptions={{ color: "#f4efe6", weight: 3, fillColor: "#14382c", fillOpacity: 1 }}
         >
           <Popup>
-            <strong>{start.name}</strong>
-            <br />
-            {start.detail}
-            <br />
-            {start.sourceNote}
+            <StartPopup start={start} />
           </Popup>
         </CircleMarker>
       ) : null}
@@ -109,19 +103,57 @@ function MapCanvas({
   )
 }
 
-function describeMarker(facility: Facility, match: ScoredMatch | undefined): string {
+function StartPopup({ start }: { start: MapOrigin }) {
+  const { t, text } = useI18n()
+  const device = start.id.startsWith("device-")
+  return (
+    <>
+      <strong>{device ? t("origin.name") : text(start.name)}</strong>
+      <br />
+      {device ? t("origin.detail") : start.detail}
+      <br />
+      {device ? t("origin.note") : text(start.sourceNote)}
+    </>
+  )
+}
+
+function describeMarker(
+  facility: Facility,
+  match: ScoredMatch | undefined,
+  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
+  text: (english: string) => string,
+): string {
   if (match) {
+    const space = text(match.activity.spaceName)
     if (!match.timeFit.sessionKnown) {
-      return `${match.activity.spaceName}. Demonstration travel estimate: ${match.timeFit.outboundMinutes} min each way. Session length is not confirmed. ${match.facility.schedule.label}.`
+      return t("map.unknownSession", {
+        space,
+        minutes: match.timeFit.outboundMinutes,
+        schedule: text(match.facility.schedule.label),
+      })
     }
-    return `${match.activity.spaceName}. Demonstration estimate: ${match.timeFit.outboundMinutes} min each way, ${match.timeFit.exerciseMinutes} min to exercise.`
+    return t("map.knownSession", {
+      space,
+      minutes: match.timeFit.outboundMinutes,
+      exercise: match.timeFit.exerciseMinutes,
+    })
   }
-  const spaces = facility.activities.map((activity) => activity.spaceName).join(", ")
+  const spaces = facility.activities.map((activity) => text(activity.spaceName)).join(", ")
   const parts = [
-    spaces ? `Supported in this dataset: ${spaces}.` : "",
-    facility.otherDocumentedUses ?? "",
+    spaces ? t("map.supported", { spaces }) : "",
+    facility.otherDocumentedUses ? text(facility.otherDocumentedUses) : "",
   ].filter(Boolean)
-  return parts.join(" ") || facility.schedule.label
+  return parts.join(" ") || text(facility.schedule.label)
+}
+
+function markerWhen(match: ScoredMatch | undefined, language: Language): string | null {
+  if (!match?.slot?.exampleWindow) return null
+  if (language === "en") return match.slot.exampleWindow
+  const demo = match.windowSlots.find((slot) => slot.id === match.slot?.id)
+  if (!demo) return match.slot.exampleWindow
+  const start = formatLocalizedClock(clockMinutes(demo.startTime), language)
+  const end = formatLocalizedClock(clockMinutes(demo.endTime), language)
+  return `${formatLocalizedDemoDate(demo.startTime, language)} · ${start}–${end}`
 }
 
 function FacilityMarker({
@@ -135,6 +167,8 @@ function FacilityMarker({
   selected: boolean
   onSelect: (facilityId: string) => void
 }) {
+  const { language, t, text } = useI18n()
+  const when = markerWhen(match, language)
   const demoMatch = match?.slot?.provenance.status === "demonstration"
   const isDemoHighlight = demoMatch === true && match?.isBest === true
   const fillColor = isDemoHighlight ? "#d8f25a" : demoMatch ? "#1e5340" : "#c8bfb2"
@@ -148,19 +182,19 @@ function FacilityMarker({
       eventHandlers={{ click: () => onSelect(facility.id) }}
     >
       <Popup>
-        <strong>{facility.name}</strong>
+        <strong>{facilityTitle(facility.name, facility.localName, language)}</strong>
         <br />
         {facility.address}
         <br />
-        {match?.slot?.exampleWindow ? (
+        {when ? (
           <>
-            Demo interval: {match.slot.exampleWindow}
+            {t("map.demoInterval", { when })}
             <br />
           </>
         ) : null}
-        {facility.coordinateSource.note}
+        {text(facility.coordinateSource.note)}
         <br />
-        {describeMarker(facility, match)}
+        {describeMarker(facility, match, t, text)}
       </Popup>
     </CircleMarker>
   )
@@ -180,7 +214,29 @@ function MapController({
   selectedFacilityId: string | null
 }) {
   const map = useMap()
+  const { t } = useI18n()
   const previousKey = useRef("")
+
+  useEffect(() => {
+    const labelControls = () => {
+      const root = map.getContainer()
+      const zoomIn = root.querySelector(".leaflet-control-zoom-in")
+      const zoomOut = root.querySelector(".leaflet-control-zoom-out")
+      zoomIn?.setAttribute("title", t("map.zoomIn"))
+      zoomIn?.setAttribute("aria-label", t("map.zoomIn"))
+      zoomOut?.setAttribute("title", t("map.zoomOut"))
+      zoomOut?.setAttribute("aria-label", t("map.zoomOut"))
+      root.querySelectorAll(".leaflet-popup-close-button").forEach((button) => {
+        button.setAttribute("title", t("map.closePopup"))
+        button.setAttribute("aria-label", t("map.closePopup"))
+      })
+    }
+    labelControls()
+    map.on("popupopen", labelControls)
+    return () => {
+      map.off("popupopen", labelControls)
+    }
+  }, [map, t])
 
   useEffect(() => {
     if (previousKey.current === refitKey) return

@@ -3,8 +3,9 @@ import { Bike, Bus, Car, Footprints } from "lucide-react"
 import type { ActivityId, MaxOutingMinutes, MinWorkoutMinutes, SearchQuery, TransportMode } from "../domain/types.ts"
 import { MAX_OUTING_OPTIONS, MIN_WORKOUT_OPTIONS, TRANSPORT_MODES } from "../domain/types.ts"
 import { MANUAL_START_IDS, startingPoints } from "../data/startingPoints.ts"
-import { ACTIVITY_GROUPS, ACTIVITY_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
-import { LOCATION_COPY } from "../lib/geolocation.ts"
+import { ACTIVITY_GROUPS } from "../data/sources.ts"
+import { groupLabel, sportLabel, transportLabel } from "../i18n/display.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 import { validateSearchTiming } from "../lib/slotMatch.ts"
 
 type HeroSearchProps = {
@@ -37,7 +38,8 @@ export function HeroSearch({
   onUseLocation,
   onSubmit,
 }: HeroSearchProps) {
-  const locationStatus = locating ? "Finding your location…" : locationMessage
+  const { language, t, text } = useI18n()
+  const locationStatus = locating ? t("location.finding") : locationMessage
   const timingError = validateSearchTiming(value)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -48,17 +50,14 @@ export function HeroSearch({
   return (
     <section className="hero shell" id="explore" aria-labelledby="hero-title">
       <div className="hero-copy">
-        <p className="eyebrow">Find your spot. Make your move.</p>
-        <h1 id="hero-title">Make time for movement.</h1>
-        <p className="lede">
-          Look for a Tampere sports slot inside the hours you are free, including the journey there
-          and back.
-        </p>
+        <p className="eyebrow">{t("hero.eyebrow")}</p>
+        <h1 id="hero-title">{t("hero.title")}</h1>
+        <p className="lede">{t("hero.lede")}</p>
       </div>
       <form className="search-card" onSubmit={handleSubmit}>
         <fieldset>
           <label className="field" htmlFor="sport">
-            Choose your sport
+            {t("sport.label")}
             <select
               id="sport"
               name="sport"
@@ -66,10 +65,10 @@ export function HeroSearch({
               onChange={(event) => onChange({ ...value, activityId: event.target.value as ActivityId })}
             >
               {ACTIVITY_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
+                <optgroup key={group.label} label={groupLabel(language, group.label)}>
                   {group.ids.map((activityId) => (
                     <option key={activityId} value={activityId}>
-                      {ACTIVITY_LABELS[activityId]}
+                      {sportLabel(language, activityId)}
                     </option>
                   ))}
                 </optgroup>
@@ -80,10 +79,10 @@ export function HeroSearch({
 
         <div className="search-grid">
           <fieldset>
-            <legend>When you are free</legend>
+            <legend>{t("when.legend")}</legend>
             <div className="time-grid">
               <label className="field" htmlFor="available-from">
-                Available from
+                {t("when.from")}
                 <input
                   id="available-from"
                   name="available-from"
@@ -94,7 +93,7 @@ export function HeroSearch({
                 />
               </label>
               <label className="field" htmlFor="available-until">
-                Available until
+                {t("when.until")}
                 <input
                   id="available-until"
                   name="available-until"
@@ -108,10 +107,10 @@ export function HeroSearch({
           </fieldset>
 
           <fieldset>
-            <legend>Outing limits</legend>
+            <legend>{t("outing.legend")}</legend>
             <div className="time-grid">
               <label className="field" htmlFor="max-outing">
-                Maximum total outing
+                {t("outing.max")}
                 <select
                   id="max-outing"
                   name="max-outing"
@@ -126,13 +125,13 @@ export function HeroSearch({
                 >
                   {MAX_OUTING_OPTIONS.map((minutes) => (
                     <option key={minutes} value={minutes}>
-                      {minutes} min, including travel both ways
+                      {t("outing.option", { minutes })}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="field" htmlFor="min-workout">
-                Minimum workout
+                {t("workout.min")}
                 <select
                   id="min-workout"
                   name="min-workout"
@@ -146,7 +145,7 @@ export function HeroSearch({
                 >
                   {MIN_WORKOUT_OPTIONS.map((minutes) => (
                     <option key={minutes} value={minutes}>
-                      {minutes} min
+                      {t("workout.option", { minutes })}
                     </option>
                   ))}
                 </select>
@@ -154,23 +153,20 @@ export function HeroSearch({
             </div>
             {timingError ? (
               <p className="field-error" role="alert">
-                {timingError}
+                {text(timingError)}
               </p>
             ) : (
               <p className="field-note">
-                The workout has to fit inside the outing after the journey there and back. A longer
-                window does not create a free slot.
+                {t("outing.note")}
               </p>
             )}
             <p className="field-note" id="ticket-hours">
-              Liikkuva Tampere ticket: the facilities can be used for a maximum of 3 hours. The
-              outing limit also counts the journey there and back. The suggested workout is only the
-              time in the room.
+              {t("ticket.hours")}
             </p>
           </fieldset>
 
           <fieldset>
-            <legend>Transport</legend>
+            <legend>{t("transport.legend")}</legend>
             <div className="choice-row">
               {TRANSPORT_MODES.map((mode) => {
                 const Icon = transportIcons[mode]
@@ -185,40 +181,39 @@ export function HeroSearch({
                     />
                     <span>
                       <Icon aria-hidden="true" size={16} strokeWidth={2} />
-                      {TRANSPORT_LABELS[mode]}
+                      {transportLabel(language, mode)}
                     </span>
                   </label>
                 )
               })}
             </div>
             <p className="field-note">
-              Travel times are separate demonstration estimates. Car does not include parking, and
-              none of the modes are live navigation.
+              {t("transport.note")}
             </p>
           </fieldset>
         </div>
 
         <label className="field" htmlFor="saved-start">
-          Start from
+          {t("start.label")}
           <select
             id="saved-start"
             name="saved-start"
             value={manualStartId ?? ""}
             onChange={(event) => onManualStart(event.target.value || null)}
           >
-            <option value="">My location, if I allow it</option>
+            <option value="">{t("start.mine")}</option>
             {MANUAL_START_IDS.map((id) => {
               const point = startingPoints.find((item) => item.id === id)
               return point ? (
                 <option key={point.id} value={point.id}>
-                  {point.name}
+                  {text(point.name)}
                 </option>
               ) : null
             })}
           </select>
         </label>
         <p className="field-note">
-          Saved points use coordinates already checked for this project. They are not your live position.
+          {t("start.note")}
         </p>
 
         <div className="location-row">
@@ -229,13 +224,13 @@ export function HeroSearch({
             disabled={locating}
             aria-describedby="location-status"
           >
-            Use my location
+            {t("location.use")}
           </button>
           <p id="location-status" className="location-status" role="status">
             {locationStatus}
           </p>
         </div>
-        <p className="field-note">{LOCATION_COPY.why}</p>
+        <p className="field-note">{t("location.why")}</p>
 
         <button
           className="primary-button"
@@ -243,11 +238,7 @@ export function HeroSearch({
           disabled={locating || timingError !== null}
           aria-describedby="location-status"
         >
-          {locating
-            ? "Finding your location…"
-            : locationReady
-              ? "Find matching facilities"
-              : "Use my location to search"}
+          {locating ? t("location.finding") : locationReady ? t("search.ready") : t("search.needLocation")}
         </button>
       </form>
     </section>

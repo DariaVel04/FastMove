@@ -1,16 +1,14 @@
-import { DEMO_NOTICE } from "../data/sources.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 import { TimmiLinks } from "./ExternalLink.tsx"
 
 export function TrustNotice() {
+  const { t } = useI18n()
   return (
-    <aside className="trust" aria-label="Availability notice">
+    <aside className="trust" aria-label={t("trust.label")}>
       <div className="shell trust-inner">
-        <p className="trust-kicker">Trust layer</p>
-        <p className="trust-notice">{DEMO_NOTICE}</p>
-        <p className="trust-extra">
-          Swimming pools and ice places are separate from that ticket. Their hours are not copied
-          here, and an outdoor rink is not shown as open right now.
-        </p>
+        <p className="trust-kicker">{t("trust.kicker")}</p>
+        <p className="trust-notice">{t("trust.notice")}</p>
+        <p className="trust-extra">{t("trust.extra")}</p>
         <TimmiLinks />
       </div>
     </aside>

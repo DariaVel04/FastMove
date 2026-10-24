@@ -1,8 +1,16 @@
 import { MapPin } from "lucide-react"
 import type { MapOrigin, ScoredMatch } from "../domain/types.ts"
-import { FACILITY_KIND_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
-import { DEMO_CARD_NOTE, matchSummaryLines, ticketCoverageLabel } from "../lib/present.ts"
+import { ticketCoverageLabel } from "../lib/present.ts"
+import {
+  facilityTitle,
+  kindLabel,
+  localizedReasons,
+  localizedSummary,
+  localizedTravelMethod,
+  transportLabel,
+} from "../i18n/display.ts"
+import { useI18n } from "../i18n/useI18n.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
 import { URLS } from "../data/sources.ts"
@@ -15,10 +23,11 @@ type ResultCardProps = {
 }
 
 export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: ResultCardProps) {
-  const { facility, activity, slot, windowSlots, travel, timeFit, score, reasons, isBest } = result
+  const { facility, activity, slot, windowSlots, travel, timeFit, score, isBest } = result
+  const { language, t, text } = useI18n()
   const isExample = slot?.provenance.status === "demonstration"
   const confirmedMatch = isBest && slot !== null && !isExample
-  const summary = matchSummaryLines(result)
+  const summary = localizedSummary(result, language)
   const directionsUrl = googleMapsDirectionsUrl(
     facility,
     travel.mode,
@@ -36,24 +45,22 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
 
   return (
     <article id={`result-${facility.id}`} className={cardClass}>
-      <h3>{facility.name}</h3>
-      <p className="ticket-status">{ticketCoverageLabel(facility.programme.sourceUrl)}</p>
+      <h3>{facilityTitle(facility.name, facility.localName, language)}</h3>
+      <p className="ticket-status">{text(ticketCoverageLabel(facility.programme.sourceUrl))}</p>
       {isExample ? (
         <div className="card-topline">
-          <p className="badge badge--data">DEMO DATA</p>
+          <p className="badge badge--data">{t("card.demo")}</p>
         </div>
       ) : confirmedMatch ? (
-        <p className="badge badge--best">Fits your window</p>
+        <p className="badge badge--best">{t("card.fits")}</p>
       ) : null}
-      {isExample ? <p className="field-note">{DEMO_CARD_NOTE}</p> : null}
-      {activity.dropInLimited ? <p className="field-note">{activity.detail}</p> : null}
+      {isExample ? <p className="field-note">{t("card.demoNote")}</p> : null}
+      {activity.dropInLimited ? <p className="field-note">{text(activity.detail)}</p> : null}
       {facility.coordinateSource.note.includes("Hall A has a separate point") ? (
-        <p className="field-note">
-          The map pin is the LIPAS point for hall B. Hall A has a separate point.
-        </p>
+        <p className="field-note">{t("card.hallB")}</p>
       ) : null}
       {facility.schedule.state === "seasonal-check" ? (
-        <p className="field-note">{facility.schedule.detail}</p>
+        <p className="field-note">{text(facility.schedule.detail)}</p>
       ) : null}
       <ul className="match-summary">
         {summary.map((line) => (
@@ -64,61 +71,65 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
       <div className="card-actions">
         {directionsUrl ? (
           <a className="directions-button" href={directionsUrl} target="_blank" rel="noreferrer">
-            Get directions
-            <span className="visually-hidden"> (opens in a new tab)</span>
+            {t("link.directions")}
+            <span className="visually-hidden"> {t("link.newTab")}</span>
           </a>
         ) : (
           <p className="field-note">
-            Directions are unavailable because this facility has no verified coordinates or address.
+            {t("card.noDirections")}
           </p>
         )}
         <button type="button" className="secondary-button" onClick={() => onShowOnMap(facility.id)}>
           <MapPin aria-hidden="true" size={16} />
-          Show on map
+          {t("link.showMap")}
         </button>
-        <ExternalLink href={facility.infoUrl}>City of Tampere page</ExternalLink>
+        <ExternalLink href={facility.infoUrl}>{t("link.city")}</ExternalLink>
         {activity.timmiUrl ? (
-          <ExternalLink href={activity.timmiUrl}>Check this room in Timmi</ExternalLink>
+          <ExternalLink href={activity.timmiUrl}>{t("link.timmiRoom")}</ExternalLink>
         ) : facility.schedule.state === "demonstration-examples" ? (
-          <ExternalLink href={URLS.timmiApp}>Open the Timmi calendar</ExternalLink>
+          <ExternalLink href={URLS.timmiApp}>{t("link.timmi")}</ExternalLink>
         ) : (
-          <p className="field-note card-schedule-note">
-            Session times are not loaded. Use the city page above to check them.
-          </p>
+          <p className="field-note card-schedule-note">{t("card.sessionCity")}</p>
         )}
       </div>
 
       <details className="score-details">
-        <summary>More details</summary>
-        <p className="local-name">{facility.localName}</p>
+        <summary>{t("card.more")}</summary>
+        <p className="local-name">{language === "fi" ? facility.name : facility.localName}</p>
         <p className="location">
-          {FACILITY_KIND_LABELS[facility.kind]} · {facility.area} · {facility.address}
+          {kindLabel(language, facility.kind)} · {facility.area} · {facility.address}
         </p>
         <p className="field-note">
-          {TRANSPORT_LABELS[travel.mode]} · demonstration estimate. {isExample ? slot?.exampleWindow : facility.schedule.label}
+          {transportLabel(language, travel.mode)} · {text(isExample ? "Demonstration examples" : facility.schedule.label)}
         </p>
         <DemoSchedule slots={windowSlots} selectedId={slot?.id ?? null} />
         <div className="reasons">
-          <h4>Why this rank</h4>
+          <h4>{t("card.why")}</h4>
           <ul>
-            {reasons.map((reason) => (
+            {localizedReasons(result, language).map((reason) => (
               <li key={reason}>{reason}</li>
             ))}
           </ul>
         </div>
         <p>
-          Travel convenience scores {Math.round(score.travelConvenience * 100)} out of 100, time fit{" "}
-          {Math.round(score.timeFit * 100)} out of 100, and data confidence{" "}
-          {Math.round(score.dataConfidence * 100)} out of 100. Ranking index {score.index}.{" "}
-          {timeFit.sessionKnown
-            ? "The interval is demonstration data."
-            : "No session length is loaded."}{" "}
-          {travel.method}
+          {t("card.scores", {
+            travel: Math.round(score.travelConvenience * 100),
+            time: Math.round(score.timeFit * 100),
+            confidence: Math.round(score.dataConfidence * 100),
+            index: score.index,
+          })}{" "}
+          {timeFit.sessionKnown ? t("card.intervalDemo") : t("card.noLength")}{" "}
+          {localizedTravelMethod(travel.mode, language, travel.method)}
         </p>
         <p className="data-status">
-          {slot ? slot.provenance.summary : facility.schedule.detail} Source: {facility.programme.sourceName}
-          {facility.programme.pageUpdated ? `, page updated ${facility.programme.pageUpdated}` : ""}.
-          Verification in Timmi: not checked. {facility.coordinateSource.note}
+          {slot ? text(slot.provenance.summary) : text(facility.schedule.detail)}{" "}
+          {t("card.source", {
+            source: text(facility.programme.sourceName),
+            updated: facility.programme.pageUpdated
+              ? t("card.updated", { date: text(facility.programme.pageUpdated) })
+              : "",
+          })}{" "}
+          {text(facility.coordinateSource.note)}
         </p>
       </details>
     </article>
