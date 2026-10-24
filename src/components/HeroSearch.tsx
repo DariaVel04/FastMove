@@ -42,6 +42,9 @@ export function HeroSearch({
   const locationStatus = locating ? t("location.finding") : locationMessage
   const timingError = validateSearchTiming(value)
   const [preset, setPreset] = useState<"now" | "evening" | "custom">("custom")
+  const [timesOpen, setTimesOpen] = useState(
+    () => window.matchMedia("(min-width: 960px)").matches,
+  )
 
   function applyNow() {
     const now = new Date()
@@ -53,6 +56,7 @@ export function HeroSearch({
       untilMinutes !== null && untilMinutes > fromMinutes ? value.availableUntil : formatClock(proposed)
     onChange({ ...value, availableFrom: from, availableUntil: until })
     setPreset("now")
+    setTimesOpen(false)
   }
 
   function applyEvening() {
@@ -60,6 +64,7 @@ export function HeroSearch({
     const until = untilMinutes !== null && untilMinutes > 17 * 60 ? value.availableUntil : "21:00"
     onChange({ ...value, availableFrom: "17:00", availableUntil: until })
     setPreset("evening")
+    setTimesOpen(false)
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -107,11 +112,25 @@ export function HeroSearch({
               <button type="button" aria-pressed={preset === "evening"} onClick={applyEvening}>
                 {t("when.evening")}
               </button>
-              <button type="button" aria-pressed={preset === "custom"} onClick={() => setPreset("custom")}>
-                {t("when.custom")}
+              <button
+                type="button"
+                aria-pressed={preset === "custom"}
+                aria-label={
+                  preset === "custom" && !timesOpen
+                    ? t("when.applied", { from: value.availableFrom, until: value.availableUntil })
+                    : undefined
+                }
+                onClick={() => {
+                  setPreset("custom")
+                  setTimesOpen(true)
+                }}
+              >
+                {preset === "custom" && !timesOpen
+                  ? `${value.availableFrom}–${value.availableUntil}`
+                  : t("when.custom")}
               </button>
             </div>
-            {preset === "custom" ? (
+            {preset === "custom" && timesOpen ? (
               <div className="time-grid">
                 <label className="field" htmlFor="available-from">
                   {t("when.from")}
@@ -142,7 +161,7 @@ export function HeroSearch({
                   />
                 </label>
               </div>
-            ) : (
+            ) : preset === "custom" ? null : (
               <p className="field-note">
                 {t("when.applied", { from: value.availableFrom, until: value.availableUntil })}
               </p>
@@ -150,7 +169,7 @@ export function HeroSearch({
           </fieldset>
 
           <fieldset>
-            <legend>{t("outing.legend")}</legend>
+            <legend className="visually-hidden">{t("outing.legend")}</legend>
             <details className="advanced-filters">
               <summary>
                 {t("outing.advanced")} · {value.maxOutingMinutes} / {value.minWorkoutMinutes} min
@@ -203,6 +222,10 @@ export function HeroSearch({
               {t("ticket.hours")}
             </p>
             <p className="field-note">{t("transport.note")}</p>
+            <p className="field-note">{t("start.note")}</p>
+            <p className="field-note" id="location-why">
+              {t("location.why")}
+            </p>
             </details>
             {timingError ? (
               <p className="field-error" role="alert">
@@ -237,48 +260,47 @@ export function HeroSearch({
           </fieldset>
         </div>
 
-        <label className="field" htmlFor="saved-start">
-          {t("start.label")}
-          <select
-            id="saved-start"
-            name="saved-start"
-            value={manualStartId ?? ""}
-            onChange={(event) => onManualStart(event.target.value || null)}
-          >
-            <option value="">{t("start.mine")}</option>
-            {MANUAL_START_IDS.map((id) => {
-              const point = startingPoints.find((item) => item.id === id)
-              return point ? (
-                <option key={point.id} value={point.id}>
-                  {text(point.name)}
-                </option>
-              ) : null
-            })}
-          </select>
-        </label>
-        <p className="field-note">
-          {t("start.note")}
-        </p>
-
-        <div className="location-row">
+        <div className="start-row">
+          <label className="field" htmlFor="saved-start">
+            {t("start.label")}
+            <select
+              id="saved-start"
+              name="saved-start"
+              value={manualStartId ?? ""}
+              onChange={(event) => onManualStart(event.target.value || null)}
+            >
+              <option value="">{t("start.mine")}</option>
+              {MANUAL_START_IDS.map((id) => {
+                const point = startingPoints.find((item) => item.id === id)
+                return point ? (
+                  <option key={point.id} value={point.id}>
+                    {text(point.name)}
+                  </option>
+                ) : null
+              })}
+            </select>
+          </label>
           <button
-            className={locationReady ? "secondary-button" : "primary-button location-button"}
+            className="secondary-button location-button"
             type="button"
             onClick={onUseLocation}
             disabled={locating}
             aria-busy={locating}
-            aria-describedby="location-status"
+            aria-describedby="location-status location-why"
           >
             {t("location.use")}
           </button>
-          <p id="location-status" className="location-status" role="status">
-            {locationStatus}
-          </p>
         </div>
-        <p className="field-note">{t("location.why")}</p>
+        <p
+          id="location-status"
+          className={!locating && locationMessage === t("location.saved") ? "visually-hidden" : "location-status"}
+          role="status"
+        >
+          {locationStatus}
+        </p>
 
         <button
-          className="primary-button"
+          className="primary-button search-submit"
           type="submit"
           disabled={locating || timingError !== null}
           aria-describedby="location-status"

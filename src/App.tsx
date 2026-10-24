@@ -63,7 +63,7 @@ export default function App() {
     code: "needed",
     keptPrevious: false,
   })
-  const [manualStartId, setManualStartId] = useState<string | null>(null)
+  const [manualStartId, setManualStartId] = useState<string | null>("keskustori")
 
   const formOrigin = deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
   const activeOrigin = submitted?.origin ?? formOrigin
@@ -153,7 +153,9 @@ export default function App() {
 
   const locationMessage = `${t(
     locationFeedback.code === "needed"
-      ? "location.needed"
+      ? manualStartId
+        ? "location.saved"
+        : "location.needed"
       : locationFeedback.code === "granted"
         ? "location.granted"
         : locationFeedback.code === "denied"

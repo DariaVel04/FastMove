@@ -25,13 +25,13 @@ export function Header() {
   return (
     <header className="site-header">
       <div className="shell header-inner">
-        <a className="wordmark" href="#top" onClick={() => setOpen(false)}>
-          <img className="mark" src={`${import.meta.env.BASE_URL}favicon.png`} alt="" width={36} height={36} />
-          <span>
+        <div className="brand-lockup">
+          <a className="wordmark" href="#top" onClick={() => setOpen(false)}>
+            <img className="mark" src={`${import.meta.env.BASE_URL}favicon.png`} alt="" width={36} height={36} />
             <strong>FastMove</strong>
-            <span className="wordmark-note">{t("header.note")}</span>
-          </span>
-        </a>
+          </a>
+          <p className="wordmark-note">{t("header.note")}</p>
+        </div>
         <div className="header-tools">
           <div className="lang-switch" role="group" aria-label={t("language.label")}>
             <button

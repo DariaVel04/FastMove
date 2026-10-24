@@ -6,10 +6,12 @@ export function TrustNotice() {
   return (
     <aside className="trust" aria-label={t("trust.label")}>
       <div className="shell trust-inner">
-        <p className="trust-kicker">{t("trust.kicker")}</p>
         <p className="trust-notice">{t("trust.notice")}</p>
-        <p className="trust-extra">{t("trust.extra")}</p>
-        <TimmiLinks />
+        <details className="trust-more">
+          <summary>{t("trust.more")}</summary>
+          <p className="trust-extra">{t("trust.extra")}</p>
+          <TimmiLinks />
+        </details>
       </div>
     </aside>
   )
