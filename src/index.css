@@ -165,6 +165,20 @@ button, input, select { font: inherit; color: inherit; }
   list-style: none;
 }
 
+.nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #d7cdbf;
+  border-radius: 12px;
+  color: var(--forest);
+}
+
 .nav-list a {
   display: inline-flex;
   align-items: center;
@@ -174,6 +188,29 @@ button, input, select { font: inherit; color: inherit; }
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
+}
+
+@media (max-width: 425px) {
+  .header-inner { flex-wrap: wrap; align-items: center; }
+  .wordmark { flex: 1 1 auto; min-width: 0; }
+  .nav-toggle { display: inline-flex; }
+  .site-nav { display: none; flex: 1 0 100%; }
+  .site-nav--open {
+    display: block;
+    margin-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+  .site-nav .nav-list {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    padding: 4px 0 6px;
+  }
+  .site-nav .nav-list a {
+    width: 100%;
+    padding: 0 4px;
+  }
 }
 
 .hero {
