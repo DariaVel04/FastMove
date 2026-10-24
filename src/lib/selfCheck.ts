@@ -1,13 +1,13 @@
 import { ACTIVITY_IDS, AVAILABLE_MINUTES, TRANSPORT_MODES } from "../domain/types.ts"
 import type { ActivityId, AvailableMinutes, TransportMode } from "../domain/types.ts"
 import { facilitiesForActivity, facilities } from "../data/facilities.ts"
-import { buildDemoSchedule, describeDemoSlot, overlapsDailyWindow } from "../data/demoSchedule.ts"
+import { buildDemoSchedule, DEMO_SCHEDULE_PROFILES, describeDemoSlot, overlapsDailyWindow } from "../data/demoSchedule.ts"
 import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, DEMO_NOTICE, DEMO_SCHEDULE_NOTICE } from "../data/sources.ts"
 import { startingPoints } from "../data/startingPoints.ts"
 import { googleMapsDirectionsUrl } from "./directions.ts"
 import { LOCATION_COPY } from "./geolocation.ts"
 import { findMatches } from "./match.ts"
-import { presentMatches } from "./present.ts"
+import { countMatchingOptions, foundOptionsLabel, matchSummaryLines, presentMatches, RESULT_DEMO_NOTE } from "./present.ts"
 import { SCORE_WEIGHTS } from "./scoring.ts"
 import { assessSlotAttendance, formatClock, parseClock, validateSearchTiming } from "./slotMatch.ts"
 import { assessTimeFit, MIN_EXERCISE_MINUTES } from "./timefit.ts"
@@ -669,6 +669,69 @@ function checkDemoSchedule(): void {
     (slot) => slot.sport === "basketball" && overlapsDailyWindow(slot, "14:30", "19:30"),
   )
   assert(afternoon.length > 0, "time window keeps afternoon basketball slots")
+  const availableStarts = (facilityId: string, sport: string) =>
+    [
+      ...new Set(
+        slots
+          .filter((slot) => slot.facilityId === facilityId && slot.sport === sport && slot.status === "demo_available")
+          .map((slot) => slot.startTime.slice(11)),
+      ),
+    ].sort()
+  assert(
+    availableStarts("kaukajarvi", "basketball").join() !== availableStarts("tesoma-ball", "basketball").join(),
+    "the same sport has different demo times at different places",
+  )
+  assert(
+    availableStarts("hervanta", "gym").join() !== availableStarts("hervanta", "martial-arts").join(),
+    "different sports at one place have different demo times",
+  )
+  assert(
+    availableStarts("tampere-swimming-centre", "swimming").join() !==
+      availableStarts("pyynikki-swimming-hall", "swimming").join(),
+    "swimming halls do not share one clock",
+  )
+  const schedulable = facilities.flatMap((facility) =>
+    facility.id === "kauppi" || facility.id === "tampere-outdoor-pool"
+      ? []
+      : facility.activities.map((activity) => `${facility.id}|${activity.id}`),
+  )
+  const profileKeys = DEMO_SCHEDULE_PROFILES.map((item) => `${item.facilityId}|${item.sport}`)
+  assert(
+    JSON.stringify([...profileKeys].sort()) === JSON.stringify([...schedulable].sort()),
+    "every listed activity has one demo profile, except closed and unnamed places",
+  )
+  assert(new Set(profileKeys).size === profileKeys.length, "profile keys are unique")
+  const availableRanges = (facilityId: string, sport: string) =>
+    [
+      ...new Set(
+        slots
+          .filter((slot) => slot.facilityId === facilityId && slot.sport === sport && slot.status === "demo_available")
+          .map((slot) => `${slot.startTime.slice(11)}-${slot.endTime.slice(11)}`),
+      ),
+    ].sort()
+  for (let leftIndex = 0; leftIndex < DEMO_SCHEDULE_PROFILES.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < DEMO_SCHEDULE_PROFILES.length; rightIndex += 1) {
+      const left = DEMO_SCHEDULE_PROFILES[leftIndex]
+      const right = DEMO_SCHEDULE_PROFILES[rightIndex]
+      if (left.facilityId !== right.facilityId && left.sport !== right.sport) continue
+      const leftRanges = availableRanges(left.facilityId, left.sport)
+      const rightRanges = availableRanges(right.facilityId, right.sport)
+      const difference =
+        leftRanges.filter((item) => !rightRanges.includes(item)).length +
+        rightRanges.filter((item) => !leftRanges.includes(item)).length
+      assert(
+        difference >= 3,
+        `${left.facilityId} ${left.sport} and ${right.facilityId} ${right.sport} need distinct demo schedules`,
+      )
+    }
+  }
+  const rebuilt = buildDemoSchedule(facilities, now)
+  assert(JSON.stringify(rebuilt.slots) === JSON.stringify(slots), "the same date rebuilds the same demo schedule")
+  assertNoSharedConflict(slots, "hervanta-ice-hall", [
+    "Two hockey rinks",
+    "Figure skating at Hervanta Ice Hall",
+  ])
+  assertNoSharedConflict(slots, "tampere-stadium", ["Sports hall 1", "Sports halls 1–3"])
   assert(
     slots.filter((slot) => slot.sport === "basketball" && overlapsDailyWindow(slot, "05:00", "06:00")).length === 0,
     "date and time filtering",
@@ -754,6 +817,186 @@ function checkDemoSchedule(): void {
 
   const line = describeDemoSlot(slots[0])
   assert(line.includes("min") && line.includes("Demo"), "schedule row names duration and demo status")
+
+  assert(
+    RESULT_DEMO_NOTE ===
+      "Demo data — illustrative schedules only, not real facility availability.",
+    "short demo note",
+  )
+  assert(foundOptionsLabel(0) === "Found 0 options", "zero options")
+  assert(foundOptionsLabel(1) === "Found 1 option", "one option")
+  assert(foundOptionsLabel(2) === "Found 2 options", "two options")
+
+  const counted = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "08:00",
+      availableUntil: "22:00",
+      maxOutingMinutes: 120,
+      minWorkoutMinutes: 30,
+      transport: "cycling",
+      startingPointId: "hervanta-campus",
+    },
+    fixtureOrigin("hervanta-campus"),
+  )
+  const onFoot = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "08:00",
+      availableUntil: "22:00",
+      maxOutingMinutes: 120,
+      minWorkoutMinutes: 30,
+      transport: "walking",
+      startingPointId: "hervanta-campus",
+    },
+    fixtureOrigin("hervanta-campus"),
+  )
+  const gym = findMatches(
+    {
+      activityId: "gym",
+      availableFrom: "08:00",
+      availableUntil: "22:00",
+      maxOutingMinutes: 120,
+      minWorkoutMinutes: 30,
+      transport: "cycling",
+      startingPointId: "hervanta-campus",
+    },
+    fixtureOrigin("hervanta-campus"),
+  )
+  assert(countMatchingOptions(counted.results) === counted.results.length, "every returned basketball result is a match")
+  assert(countMatchingOptions(counted.results) > 0, "basketball search has options")
+  assert(
+    counted.timeExclusions.every(
+      (exclusion) => !counted.results.some((result) => result.facility.id === exclusion.facilityId),
+    ),
+    "out-of-outing facilities are not counted",
+  )
+  assert(countMatchingOptions(empty.results) === 0, "out-of-window search counts nothing")
+  assert(countMatchingOptions(tightOuting.results) === 0, "a too-short outing counts nothing")
+  assert(
+    gym.results.every((result) => result.activity.id === "gym"),
+    "a sport change does not keep the previous sport",
+  )
+  assert(countMatchingOptions(onFoot.results) <= countMatchingOptions(counted.results), "transport can only remove matches")
+  const partial = counted.results.find(
+    (result) => result.chosenInterval !== null && result.timeFit.exerciseMinutes < (result.slot?.durationMinutes ?? 0),
+  )
+  assert(partial !== undefined && partial.chosenInterval !== null && partial.slot !== null, "a clipped demo interval")
+  if (partial?.chosenInterval && partial.slot) {
+    const summary = matchSummaryLines(partial)
+    assert(summary.some((item) => item.startsWith("Demo interval:")), "demo interval label")
+    assert(summary.some((item) => item.startsWith("Usable in your window:")), "usable period label")
+    assert(summary.includes("Status: DEMO DATA"), "demo status")
+    assert(
+      partial.chosenInterval.usableEndMinutes - partial.chosenInterval.usableStartMinutes ===
+        partial.timeFit.exerciseMinutes,
+      "usable period matches the suggested workout",
+    )
+    assert(
+      partial.chosenInterval.demoEndMinutes - partial.chosenInterval.demoStartMinutes === partial.slot.durationMinutes,
+      "demo interval is the original row",
+    )
+  }
+
+  const afternoonQueries = [
+    ["14:30", "16:00"],
+    ["15:00", "16:30"],
+    ["16:00", "18:00"],
+    ["17:00", "19:00"],
+  ] as const
+  for (const [from, until] of afternoonQueries) {
+    const afternoonGym = findMatches(
+      {
+        activityId: "gym",
+        availableFrom: from,
+        availableUntil: until,
+        maxOutingMinutes: 90,
+        minWorkoutMinutes: 45,
+        transport: "cycling",
+        startingPointId: "hervanta-campus",
+      },
+      fixtureOrigin("hervanta-campus"),
+    )
+    const hervantaGym = afternoonGym.results.find((result) => result.facility.id === "hervanta")
+    assert(hervantaGym !== undefined, `gym search ${from}–${until} finds Hervanta`)
+    if (hervantaGym) {
+      assert(hervantaGym.timeFit.fits, `gym search ${from}–${until} fits`)
+      assert(hervantaGym.timeFit.exerciseMinutes >= 45, `gym search ${from}–${until} meets the workout`)
+      assert(
+        hervantaGym.timeFit.exerciseMinutes + hervantaGym.timeFit.roundTripMinutes <= 90,
+        `gym search ${from}–${until} keeps both travel legs inside the outing`,
+      )
+      assert(hervantaGym.timeFit.outboundMinutes > 0 && hervantaGym.timeFit.returnMinutes > 0, "travel is not zero")
+    }
+  }
+
+  const afternoonBasketball = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "14:30",
+      availableUntil: "16:00",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "hervanta-campus",
+    },
+    fixtureOrigin("hervanta-campus"),
+  )
+  assert(
+    afternoonBasketball.results.some((result) => result.timeFit.exerciseMinutes >= 45),
+    "14:30–16:00 basketball search finds a feasible demo workout",
+  )
+
+  const tenEachWay = assessSlotAttendance(
+    {
+      startMinutes: parseClock("14:30") ?? 0,
+      endMinutes: parseClock("15:40") ?? 0,
+      kind: "demo-interval",
+      activityId: "gym",
+      fixedSession: false,
+    },
+    {
+      windowStart: parseClock("14:30") ?? 0,
+      windowEnd: parseClock("16:00") ?? 0,
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      outboundMinutes: 10,
+      returnMinutes: 10,
+      selectedActivityId: "gym",
+    },
+  )
+  assert(
+    tenEachWay.fits &&
+      tenEachWay.workoutMinutes !== null &&
+      tenEachWay.workoutMinutes >= 45 &&
+      tenEachWay.workoutMinutes <= 70,
+    "10 minutes each way leaves a 45–70 minute demo workout",
+  )
+  assert(
+    tenEachWay.outingMinutes === (tenEachWay.workoutMinutes ?? 0) + 20,
+    "TimeFit adds outbound and return travel",
+  )
+}
+
+function assertNoSharedConflict(
+  slots: { facilityId: string; spaceName: string; startTime: string; endTime: string }[],
+  facilityId: string,
+  spaceNames: string[],
+): void {
+  const grouped = new Map<string, { startTime: string; endTime: string }[]>()
+  for (const slot of slots) {
+    if (slot.facilityId !== facilityId || !spaceNames.includes(slot.spaceName)) continue
+    const day = slot.startTime.slice(0, 10)
+    const list = grouped.get(day) ?? []
+    list.push(slot)
+    grouped.set(day, list)
+  }
+  for (const group of grouped.values()) {
+    const ordered = [...group].sort((left, right) => left.startTime.localeCompare(right.startTime))
+    for (let index = 1; index < ordered.length; index += 1) {
+      assert(ordered[index - 1].endTime <= ordered[index].startTime, `${facilityId} shared rooms stay consistent`)
+    }
+  }
 }
 
 function fixtureOrigin(id: string): { latitude: number; longitude: number } {

@@ -233,11 +233,21 @@ export type ScoreBreakdown = {
   index: number
 }
 
+/** The chosen demo row, plus the part of it that fits this search. */
+export type ChosenInterval = {
+  demoStartMinutes: number
+  demoEndMinutes: number
+  usableStartMinutes: number
+  usableEndMinutes: number
+}
+
 export type ScoredMatch = {
   facility: Facility
   activity: SupportedActivity
   /** Null when the place is confirmed but no session length is on record. */
   slot: AvailabilitySlot | null
+  /** Null when no demo row was selected for this result. */
+  chosenInterval: ChosenInterval | null
   /** Demo rows inside the searched time of day. Includes unavailable illustrations. */
   windowSlots: DemoSlot[]
   travel: TravelEstimate

@@ -1,6 +1,7 @@
 import type { MapOrigin, ScheduleNote, ScoredMatch, SortKey, TimeExclusion, TransportMode } from "../domain/types.ts"
 import { facilities } from "../data/facilities.ts"
-import { DEMO_SCHEDULE_NOTICE, NO_CONFIRMED_SLOTS, URLS } from "../data/sources.ts"
+import { URLS } from "../data/sources.ts"
+import { countMatchingOptions, foundOptionsLabel, RESULT_DEMO_NOTE } from "../lib/present.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
@@ -37,8 +38,9 @@ export function Recommendations({
   onShowOnMap,
   directionsOrigin,
 }: RecommendationsProps) {
-  const examples = visible.filter((result) => result.slot !== null)
+  const examples = visible.filter((result) => result.slot !== null && result.timeFit.fits)
   const unconfirmed = visible.filter((result) => result.slot === null)
+  const matchCount = countMatchingOptions(visible)
   return (
     <section id="results" className="results" aria-labelledby="results-title" aria-live="polite">
       <div className="section-heading">
@@ -57,6 +59,8 @@ export function Recommendations({
         </div>
       ) : (
         <>
+          <p className="found-options">{foundOptionsLabel(matchCount)}</p>
+          <p className="demo-notice">{RESULT_DEMO_NOTE}</p>
           <div className="result-controls">
             <label className="field field--inline" htmlFor="sort-results">
               Sort
@@ -69,47 +73,30 @@ export function Recommendations({
                 <option value="travel">Shortest travel</option>
               </select>
             </label>
-            <p className="result-count">
-              {examples.length} example {examples.length === 1 ? "slot" : "slots"}, {unconfirmed.length}{" "}
-              {unconfirmed.length === 1 ? "place" : "places"} without a loaded calendar
-              {timeExclusions.length > 0
-                ? `, ${timeExclusions.length} outside this outing`
-                : ""}
-            </p>
           </div>
 
-          <p className="demo-notice">{DEMO_SCHEDULE_NOTICE}</p>
-
-          <div className="empty-state" role="status">
-            <h3>No matching confirmed slots</h3>
-            <p>{NO_CONFIRMED_SLOTS}</p>
-            {activityGapText ? <p>{activityGapText}</p> : null}
-            <p className="link-row">
-              <ExternalLink href={URLS.timmiApp}>Open the Timmi calendar</ExternalLink>
-              <ExternalLink href={URLS.ticket}>Liikkuva Tampere ticket page</ExternalLink>
-            </p>
-          </div>
-
-          {examples.length > 0 ? (
-            <div className="result-group">
-              <h3>Demonstration examples</h3>
-              <p className="field-note">
-                These demo slots show whether a fictional visit would fit your window and outing limit.
-                They are not free slots and they have not been checked in Timmi.
+          {matchCount === 0 ? (
+            <div className="empty-state" role="status">
+              <p>No demo interval fits this search. This does not mean the facilities are fully booked.</p>
+              {activityGapText ? <p>{activityGapText}</p> : null}
+              <p className="link-row">
+                <ExternalLink href={URLS.timmiApp}>Open the Timmi calendar</ExternalLink>
+                <ExternalLink href={URLS.ticket}>Liikkuva Tampere ticket page</ExternalLink>
               </p>
-              <div className="result-list">
-                {examples.map((result) => (
-                  <ResultCard
-                    key={result.facility.id}
-                    result={result}
-                    selected={selectedFacilityId === result.facility.id}
-                    onShowOnMap={onShowOnMap}
-                    directionsOrigin={directionsOrigin}
-                  />
-                ))}
-              </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="result-list">
+              {examples.map((result) => (
+                <ResultCard
+                  key={result.facility.id}
+                  result={result}
+                  selected={selectedFacilityId === result.facility.id}
+                  onShowOnMap={onShowOnMap}
+                  directionsOrigin={directionsOrigin}
+                />
+              ))}
+            </div>
+          )}
 
           {unconfirmed.length > 0 ? (
             <div className="result-group">

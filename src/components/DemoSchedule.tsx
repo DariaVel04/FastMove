@@ -1,5 +1,4 @@
 import type { DemoSlot } from "../domain/types.ts"
-import { DEMO_SLOT_SOURCE_LABEL } from "../domain/types.ts"
 import { demoStatusLabel, formatDemoDate, formatDemoRange } from "../data/demoSchedule.ts"
 
 type DemoScheduleProps = {
@@ -11,7 +10,6 @@ export function DemoSchedule({ slots, selectedId = null }: DemoScheduleProps) {
   const conditions = slots.find((slot) => slot.conditionsNote)?.conditionsNote ?? null
   return (
     <section className="demo-schedule" aria-label="Demo schedule">
-      <p className="demo-banner">{DEMO_SLOT_SOURCE_LABEL}</p>
       {slots.length === 0 ? (
         <p className="field-note">No demo slots fall inside this time window. Widen the hours you are free.</p>
       ) : (

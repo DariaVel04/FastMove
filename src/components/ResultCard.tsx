@@ -1,7 +1,8 @@
 import { MapPin } from "lucide-react"
 import type { MapOrigin, ScoredMatch } from "../domain/types.ts"
-import { ACTIVITY_LABELS, FACILITY_KIND_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
+import { FACILITY_KIND_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
+import { matchSummaryLines } from "../lib/present.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
 import { URLS } from "../data/sources.ts"
@@ -17,9 +18,7 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
   const { facility, activity, slot, windowSlots, travel, timeFit, score, reasons, isBest } = result
   const isExample = slot?.provenance.status === "demonstration"
   const confirmedMatch = isBest && slot !== null && !isExample
-  const outingMinutes = timeFit.sessionKnown
-    ? timeFit.outboundMinutes + timeFit.exerciseMinutes + timeFit.returnMinutes
-    : null
+  const summary = matchSummaryLines(result)
   const directionsUrl = googleMapsDirectionsUrl(
     facility,
     travel.mode,
@@ -37,97 +36,13 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
 
   return (
     <article id={`result-${facility.id}`} className={cardClass}>
-      <div className="card-topline">
-        {confirmedMatch ? <p className="badge badge--best">Fits your window</p> : null}
-        <p className={isExample ? "badge badge--data" : "badge badge--schedule"}>
-          {isExample ? "Example only" : facility.schedule.label}
-        </p>
-      </div>
+      {confirmedMatch ? <p className="badge badge--best">Fits your window</p> : null}
       <h3>{facility.name}</h3>
-      <p className="local-name">{facility.localName}</p>
-      <p className="location">
-        {FACILITY_KIND_LABELS[facility.kind]} · {facility.area} · {facility.address}
-      </p>
-      <p className="activity-line">
-        {activity.spaceName.toLowerCase() === ACTIVITY_LABELS[activity.id].toLowerCase()
-          ? ACTIVITY_LABELS[activity.id]
-          : `${ACTIVITY_LABELS[activity.id]} · ${activity.spaceName}`}
-      </p>
-
-      <dl className="stats">
-        <div>
-          <dt>Travel</dt>
-          <dd>
-            {timeFit.outboundMinutes} min out, {timeFit.returnMinutes} min back
-          </dd>
-          <dd className="stat-note">Demonstration estimate · {TRANSPORT_LABELS[travel.mode]}</dd>
-        </div>
-        <div>
-          <dt>Suggested workout</dt>
-          <dd>{timeFit.sessionKnown ? `${timeFit.exerciseMinutes} min` : "Not confirmed"}</dd>
-          <dd className="stat-note">
-            {timeFit.sessionKnown
-              ? "Capped by the example length and the outing limit"
-              : "No session length is loaded"}
-          </dd>
-        </div>
-        <div>
-          <dt>Total outing</dt>
-          <dd>{outingMinutes === null ? "Not confirmed" : `${outingMinutes} min`}</dd>
-          <dd className="stat-note">Workout plus travel both ways</dd>
-        </div>
-        <div>
-          <dt>Slot</dt>
-          <dd>{isExample ? "Demo slot — illustrative only" : facility.schedule.label}</dd>
-          <dd className="stat-note">
-            {isExample
-              ? `${slot?.exampleWindow}. ${slot?.durationMinutes} min demo, not a booked interval.`
-              : "Not a live open status"}
-          </dd>
-        </div>
-      </dl>
-
-      <DemoSchedule slots={windowSlots} selectedId={slot?.id ?? null} />
-
-      <div className="reasons">
-        <h4>Why this rank</h4>
-        <ul>
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
-      </div>
-
-      <details className="score-details">
-        <summary>How this rank was calculated</summary>
-        <p>
-          Incompatible facilities are removed first. Travel convenience scores{" "}
-          {Math.round(score.travelConvenience * 100)} out of 100, time fit{" "}
-          {Math.round(score.timeFit * 100)} out of 100, and data confidence{" "}
-          {Math.round(score.dataConfidence * 100)} out of 100. Those factors are weighted 55%, 30%
-          and 15%.{" "}
-          {timeFit.sessionKnown
-            ? "Data confidence stays at 30 because the slot is demonstration data."
-            : "Time fit stays at 0 because the session length is unknown. Data confidence is not a claim that the place is open."}
-        </p>
-        <p>Ranking index {score.index}. This is an ordering aid, not a probability.</p>
-        <p>{travel.method}</p>
-      </details>
-
-      <p className="data-status">
-        {slot ? (
-          <>
-            <strong>Data status: demonstration.</strong> {slot.provenance.summary}{" "}
-          </>
-        ) : (
-          <>
-            <strong>Data status: {facility.schedule.label}.</strong> {facility.schedule.detail}{" "}
-          </>
-        )}
-        Source: {facility.programme.sourceName}
-        {facility.programme.pageUpdated ? `, page updated ${facility.programme.pageUpdated}` : ""}.
-        Verification in Timmi: not checked. {facility.coordinateSource.note}
-      </p>
+      <ul className="match-summary">
+        {summary.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
 
       <div className="card-actions">
         {directionsUrl ? (
@@ -155,6 +70,40 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
           </p>
         )}
       </div>
+
+      <details className="score-details">
+        <summary>More details</summary>
+        <p className="local-name">{facility.localName}</p>
+        <p className="location">
+          {FACILITY_KIND_LABELS[facility.kind]} · {facility.area} · {facility.address}
+        </p>
+        <p className="field-note">
+          {TRANSPORT_LABELS[travel.mode]} · demonstration estimate. {isExample ? slot?.exampleWindow : facility.schedule.label}
+        </p>
+        <DemoSchedule slots={windowSlots} selectedId={slot?.id ?? null} />
+        <div className="reasons">
+          <h4>Why this rank</h4>
+          <ul>
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+        <p>
+          Travel convenience scores {Math.round(score.travelConvenience * 100)} out of 100, time fit{" "}
+          {Math.round(score.timeFit * 100)} out of 100, and data confidence{" "}
+          {Math.round(score.dataConfidence * 100)} out of 100. Ranking index {score.index}.{" "}
+          {timeFit.sessionKnown
+            ? "The interval is demonstration data."
+            : "No session length is loaded."}{" "}
+          {travel.method}
+        </p>
+        <p className="data-status">
+          {slot ? slot.provenance.summary : facility.schedule.detail} Source: {facility.programme.sourceName}
+          {facility.programme.pageUpdated ? `, page updated ${facility.programme.pageUpdated}` : ""}.
+          Verification in Timmi: not checked. {facility.coordinateSource.note}
+        </p>
+      </details>
     </article>
   )
 }
