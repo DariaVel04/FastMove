@@ -70,7 +70,7 @@ function demoToAvailability(demo: DemoSlot): AvailabilitySlot {
     activityId: demo.sport,
     spaceName: demo.spaceName,
     durationMinutes: demo.durationMinutes,
-    exampleWindow: `${formatDemoDate(demo.startTime)} ${formatDemoRange(demo)}`,
+    exampleWindow: `${formatDemoDate(demo.startTime)} · ${formatDemoRange(demo)}`,
     provenance: {
       status: "demonstration",
       sourceName: demo.sourceLabel,
@@ -80,20 +80,64 @@ function demoToAvailability(demo: DemoSlot): AvailabilitySlot {
   }
 }
 
+type DatedChoice = {
+  startTime: string
+  durationMinutes: number
+  workoutMinutes: number
+}
+
+/**
+ * Keep a fitting demo row from today when one exists.
+ * Otherwise keep the nearest later day. A longer row on a later day does not win.
+ */
+export function chooseNearestFittingDemo<T extends DatedChoice>(
+  candidates: readonly T[],
+  today: string,
+): T | null {
+  if (candidates.length === 0) return null
+  const rank = (items: readonly T[]) =>
+    [...items].sort(
+      (left, right) =>
+        right.workoutMinutes - left.workoutMinutes ||
+        right.durationMinutes - left.durationMinutes ||
+        left.startTime.localeCompare(right.startTime),
+    )
+  const todayMatches = candidates.filter((item) => item.startTime.slice(0, 10) === today)
+  if (todayMatches.length > 0) return rank(todayMatches)[0]
+  const nearestDay = [...candidates].map((item) => item.startTime.slice(0, 10)).sort()[0]
+  return rank(candidates.filter((item) => item.startTime.slice(0, 10) === nearestDay))[0]
+}
+
+function localDayKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 export function findMatches(
   query: SearchQuery,
   origin?: { latitude: number; longitude: number } | null,
 ): MatchOutcome {
   const start = origin ?? null
   if (!start || !Number.isFinite(start.latitude) || !Number.isFinite(start.longitude)) {
-    return { results: [], confirmed: [], timeExclusions: [], scheduleNotes: [], activitySupportedCount: 0 }
+    return {
+      results: [],
+      confirmed: [],
+      timeExclusions: [],
+      scheduleNotes: [],
+      visitCautions: [],
+      activitySupportedCount: 0,
+    }
   }
 
   const results: ScoredMatch[] = []
+  const visitCautions: ScoredMatch[] = []
   const timeExclusions: TimeExclusion[] = []
   const scheduleNotes: ScheduleNote[] = []
   let activitySupportedCount = 0
-  const demoSchedule = buildDemoSchedule(facilities)
+  const now = new Date()
+  const todayKey = localDayKey(now)
+  const demoSchedule = buildDemoSchedule(facilities, now)
   const windowStart = parseClock(query.availableFrom) ?? 0
   const windowEnd = parseClock(query.availableUntil) ?? 0
 
@@ -182,14 +226,7 @@ export function findMatches(
           },
         ),
       }))
-    const fitting = evaluated
-      .filter((item) => item.assessment.fits && item.assessment.workoutMinutes !== null)
-      .sort(
-        (left, right) =>
-          (right.assessment.workoutMinutes ?? 0) - (left.assessment.workoutMinutes ?? 0) ||
-          right.demo.durationMinutes - left.demo.durationMinutes ||
-          left.demo.startTime.localeCompare(right.demo.startTime),
-      )
+    const fitting = evaluated.filter((item) => item.assessment.fits && item.assessment.workoutMinutes !== null)
 
     if (fitting.length === 0) {
       timeExclusions.push({
@@ -203,7 +240,16 @@ export function findMatches(
       continue
     }
 
-    const chosen = fitting[0]
+    const chosen = chooseNearestFittingDemo(
+      fitting.map((entry) => ({
+        ...entry,
+        startTime: entry.demo.startTime,
+        durationMinutes: entry.demo.durationMinutes,
+        workoutMinutes: entry.assessment.workoutMinutes ?? 0,
+      })),
+      todayKey,
+    )
+    if (!chosen) continue
     const workoutMinutes = chosen.assessment.workoutMinutes ?? 0
     const fit: TimeFit = {
       outboundMinutes: travel.outboundMinutes,
@@ -221,7 +267,7 @@ export function findMatches(
       dataConfidence: DEMONSTRATION_CONFIDENCE,
     })
 
-    results.push({
+    const scored: ScoredMatch = {
       facility,
       activity,
       slot,
@@ -237,11 +283,13 @@ export function findMatches(
       score,
       reasons: buildReasons(activity, TRANSPORT_LABELS[query.transport], fit, slot, facility),
       isBest: false,
-    })
+    }
+    if (activity.dropInLimited) visitCautions.push(scored)
+    else results.push(scored)
   }
 
   results.sort(compareRelevance)
-  return { results, confirmed: [], timeExclusions, scheduleNotes, activitySupportedCount }
+  return { results, confirmed: [], timeExclusions, scheduleNotes, visitCautions, activitySupportedCount }
 }
 
 export function compareRelevance(left: ScoredMatch, right: ScoredMatch): number {
@@ -269,7 +317,7 @@ export function describeActivityGap(activityId: SearchQuery["activityId"]): stri
   const alternatives =
     " Listed places exist for Gym / Fitness, Swimming, Ice Hockey and Public Outdoor Ice Rinks."
   if (activity.status === "needs-verification") {
-    return `${ACTIVITY_LABELS[activityId]} is not a confirmed match. ${activity.summary} Check the city page or Timmi before you decide a place is unavailable.${alternatives}`
+    return `${ACTIVITY_LABELS[activityId]} is not matched to a room in this dataset. ${activity.summary} Check the city page or Timmi before you decide a place is unavailable.${alternatives}`
   }
   return `No listed place confirms ${ACTIVITY_LABELS[activityId]}. ${activity.summary}${alternatives}`
 }

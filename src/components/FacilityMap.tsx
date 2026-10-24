@@ -36,7 +36,7 @@ export function FacilityMap(props: FacilityMapProps) {
           </li>
         ) : null}
         <li>
-          <span className="swatch swatch--best" /> Best match
+          <span className="swatch swatch--best" /> Demo match
         </li>
         <li>
           <span className="swatch swatch--match" /> Other match
@@ -135,9 +135,10 @@ function FacilityMarker({
   selected: boolean
   onSelect: (facilityId: string) => void
 }) {
-  const isBest = match?.isBest === true
-  const fillColor = isBest ? "#d8f25a" : match ? "#1e5340" : "#c8bfb2"
-  const radius = selected ? 13 : isBest ? 11 : match ? 9 : 6
+  const demoMatch = match?.slot?.provenance.status === "demonstration"
+  const isDemoHighlight = demoMatch === true && match?.isBest === true
+  const fillColor = isDemoHighlight ? "#d8f25a" : demoMatch ? "#1e5340" : "#c8bfb2"
+  const radius = selected ? 13 : isDemoHighlight ? 11 : demoMatch ? 9 : 6
 
   return (
     <CircleMarker
@@ -151,6 +152,12 @@ function FacilityMarker({
         <br />
         {facility.address}
         <br />
+        {match?.slot?.exampleWindow ? (
+          <>
+            Demo interval: {match.slot.exampleWindow}
+            <br />
+          </>
+        ) : null}
         {facility.coordinateSource.note}
         <br />
         {describeMarker(facility, match)}

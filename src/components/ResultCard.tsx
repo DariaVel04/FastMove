@@ -2,7 +2,7 @@ import { MapPin } from "lucide-react"
 import type { MapOrigin, ScoredMatch } from "../domain/types.ts"
 import { FACILITY_KIND_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
-import { matchSummaryLines } from "../lib/present.ts"
+import { DEMO_CARD_NOTE, matchSummaryLines, ticketCoverageLabel } from "../lib/present.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 import { DemoSchedule } from "./DemoSchedule.tsx"
 import { URLS } from "../data/sources.ts"
@@ -36,8 +36,25 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
 
   return (
     <article id={`result-${facility.id}`} className={cardClass}>
-      {confirmedMatch ? <p className="badge badge--best">Fits your window</p> : null}
       <h3>{facility.name}</h3>
+      <p className="ticket-status">{ticketCoverageLabel(facility.programme.sourceUrl)}</p>
+      {isExample ? (
+        <div className="card-topline">
+          <p className="badge badge--data">DEMO DATA</p>
+        </div>
+      ) : confirmedMatch ? (
+        <p className="badge badge--best">Fits your window</p>
+      ) : null}
+      {isExample ? <p className="field-note">{DEMO_CARD_NOTE}</p> : null}
+      {activity.dropInLimited ? <p className="field-note">{activity.detail}</p> : null}
+      {facility.coordinateSource.note.includes("Hall A has a separate point") ? (
+        <p className="field-note">
+          The map pin is the LIPAS point for hall B. Hall A has a separate point.
+        </p>
+      ) : null}
+      {facility.schedule.state === "seasonal-check" ? (
+        <p className="field-note">{facility.schedule.detail}</p>
+      ) : null}
       <ul className="match-summary">
         {summary.map((line) => (
           <li key={line}>{line}</li>

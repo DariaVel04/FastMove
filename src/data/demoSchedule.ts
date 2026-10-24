@@ -24,9 +24,6 @@ export type DemoScheduleProfile = {
   conflictGroup: string | null
 }
 
-const OUTDOOR_NOTE =
-  "Seasonal demo session. Real ice conditions are not verified, and this does not mean the rink is open."
-
 const SHARED_NOTE =
   "Demo only: this room is shared, so the other listed sports use different illustrated times."
 
@@ -66,13 +63,13 @@ export const DEMO_SCHEDULE_PROFILES: readonly DemoScheduleProfile[] = [
     "10:20-11:40a 12:50-13:40u 15:05-16:20a 16:50-18:00a 18:30-19:30a",
   ]),
   profile("kaukajarvi", "gym", "Lower gym", null, null, [
-    "08:45-09:40a 11:00-12:15a 13:30-14:15u 14:40-16:05a 16:25-17:40a 18:10-19:00a",
-    "09:25-10:40a 12:00-12:50a 14:35-16:00a 16:20-17:05a 17:30-18:50a",
-    "10:05-11:20a 12:40-13:30u 15:00-16:20a 16:45-18:00a 18:30-19:15a",
-    "09:00-10:15a 11:40-12:30a 14:50-16:10a 16:30-17:45a 19:00-20:05a",
-    "08:50-09:45a 10:30-11:45u 13:10-14:00a 14:30-15:55a 16:15-17:30a 18:00-19:20a",
-    "09:10-10:25a 12:20-13:35a 14:45-16:15a 16:40-17:25a 17:50-19:05a",
-    "10:20-11:35a 13:00-13:45u 14:55-16:10a 16:35-17:50a 18:20-19:40a",
+    "08:45-09:40a 11:00-12:15a 13:30-14:15u 14:40-15:40a 16:25-17:40a 18:10-19:00a",
+    "09:25-10:40a 12:00-12:50a 14:55-15:50a 16:20-17:05a 17:30-18:50a",
+    "10:05-11:20a 12:40-13:30u 15:00-15:50a 16:45-18:00a 18:30-19:15a",
+    "09:00-10:15a 11:40-12:30a 14:50-15:45a 16:30-17:45a 19:00-20:05a",
+    "08:50-09:45a 10:30-11:45u 13:10-14:00a 14:42-15:32a 16:15-17:30a 18:00-19:20a",
+    "09:10-10:25a 12:20-13:35a 14:45-15:35a 16:40-17:25a 17:50-19:05a",
+    "10:20-11:35a 13:00-13:45u 15:05-15:55a 16:35-17:50a 18:20-19:40a",
   ]),
   profile("kaukajarvi", "basketball", "Ball sports hall", SHARED_NOTE, null, [
     "09:00-10:00a 14:30-16:00a 18:10-19:20a",
@@ -129,13 +126,13 @@ export const DEMO_SCHEDULE_PROFILES: readonly DemoScheduleProfile[] = [
     "10:25-11:45a 13:20-14:10a 14:50-16:10a 16:40-17:45a 18:05-19:05a",
   ]),
   profile("tampere-stadium", "gym", "Gym", null, null, [
-    "09:45-11:00a 12:15-13:00u 14:35-16:00a 16:20-17:35a 18:05-19:15a",
-    "08:50-10:05a 11:20-12:20a 14:45-16:10a 16:30-17:20a 17:45-19:00a",
-    "09:10-10:25a 13:05-14:00a 15:00-16:20a 16:45-18:05a 18:25-19:10u",
-    "10:00-11:20a 12:40-13:30a 14:30-15:55a 16:15-17:25a 19:00-20:10a",
-    "09:00-10:10a 11:30-12:15u 14:50-16:15a 16:40-17:55a 18:15-19:05a",
-    "09:30-10:50a 12:05-13:05a 14:40-16:00a 16:25-17:40a 18:00-18:50a 19:10-20:00a",
-    "10:10-11:25a 13:15-14:05u 14:55-16:10a 16:35-17:45a 18:10-19:25a",
+    "09:45-11:00a 12:15-13:00u 15:10-16:05a 16:20-17:35a 18:05-19:15a",
+    "08:50-10:05a 11:20-12:20a 15:15-16:10a 16:30-17:20a 17:45-19:00a",
+    "09:10-10:25a 13:05-14:00a 15:05-16:00a 16:45-18:05a 18:25-19:10u",
+    "10:00-11:20a 12:40-13:30a 15:10-16:00a 16:15-17:25a 19:00-20:10a",
+    "09:00-10:10a 11:30-12:15u 15:00-15:55a 16:40-17:55a 18:15-19:05a",
+    "09:30-10:50a 12:05-13:05a 15:20-16:10a 16:25-17:40a 18:00-18:50a 19:10-20:00a",
+    "10:10-11:25a 13:15-14:05u 15:10-16:05a 16:35-17:45a 18:10-19:25a",
   ]),
   profile("tampere-stadium", "floorball", "Sports hall 1", SHARED_NOTE, "stadium-halls", [
     "09:00-10:15a 11:30-12:30u 14:30-16:00a",
@@ -209,137 +206,14 @@ export const DEMO_SCHEDULE_PROFILES: readonly DemoScheduleProfile[] = [
     "10:00-11:15a 12:30-13:30a 14:45-16:15a 16:35-17:25a 17:50-19:05a",
     "09:15-10:30a 11:50-12:55u 15:05-16:25a 16:50-18:05a 18:30-19:20a",
   ]),
-  profile("tampere-swimming-centre", "swimming", "Indoor swimming pools", null, null, [
-    "09:00-09:45a 11:00-12:00a 12:30-13:15u 14:30-15:30a 16:00-17:00a 18:00-19:00a",
-    "09:30-10:30a 12:15-13:00a 14:40-15:40a 16:30-17:15a 18:20-19:20a",
-    "08:45-09:30a 10:15-11:15a 13:00-13:45u 14:30-15:30a 17:00-17:45a 18:30-19:30a",
-    "10:00-10:45a 12:00-13:00a 14:50-15:50a 16:15-17:15a 19:00-19:45u",
-    "09:15-10:00a 11:30-12:30u 13:00-13:45a 14:35-15:35a 16:45-17:45a 18:15-19:00a",
-    "09:40-10:40a 12:20-13:05a 15:00-16:00a 16:20-17:10a 18:40-19:40a",
-    "08:50-09:35a 10:45-11:45a 14:30-16:00a 17:20-18:05a 19:10-20:00u",
-  ]),
-  profile("tesoma-swimming-hall", "swimming", "Indoor swimming pools", null, null, [
-    "09:20-10:20a 11:40-12:25u 14:45-15:45a 16:15-17:15a 18:10-19:10a",
-    "08:40-09:25a 10:30-11:30a 13:20-14:05a 15:00-16:00a 17:00-17:45a 18:30-19:15a",
-    "09:50-10:50a 12:10-13:10a 14:30-15:15a 16:40-17:40a 19:00-19:45u",
-    "09:05-10:05a 11:20-12:05a 13:40-14:25u 14:55-16:10a 16:30-17:15a 18:00-19:00a",
-    "10:10-11:10a 12:30-13:15a 14:40-15:40a 16:00-16:45u 17:30-18:30a 19:10-20:00a",
-    "08:55-09:55a 11:00-11:45u 13:00-13:45a 15:10-16:10a 16:45-17:45a 18:20-19:05a",
-    "09:35-10:35a 12:00-13:00a 14:30-15:30a 16:20-17:20a 18:45-19:45a",
-  ]),
-  profile("pyynikki-swimming-hall", "swimming", "Indoor swimming pools", null, null, [
-    "10:05-11:05a 12:40-13:25a 14:50-15:50a 16:25-17:25a 18:35-19:35a",
-    "09:10-10:10a 11:25-12:10u 14:30-15:15a 15:45-16:45a 17:15-18:15a 19:00-19:45u",
-    "08:50-09:50a 10:40-11:40a 13:10-13:55u 15:05-16:05a 16:30-17:15a 18:15-19:00a",
-    "09:40-10:40a 12:05-13:05a 14:35-15:35a 16:00-17:00a 18:00-18:45a 19:20-20:05a",
-    "09:00-09:45a 11:10-12:10a 13:30-14:15a 14:55-16:10a 16:40-17:40a 18:50-19:35u",
-    "10:20-11:20a 12:15-13:00u 14:40-15:40a 16:10-17:10a 17:50-18:50a",
-    "09:25-10:25a 11:50-12:50a 14:30-15:30a 16:45-17:45a 18:20-19:20a",
-  ]),
-  profile("hervanta-swimming-hall", "swimming", "Indoor swimming pools", null, null, [
-    "08:45-09:45a 11:15-12:00a 13:20-14:05u 14:35-15:35a 16:05-17:05a 18:05-18:50a",
-    "09:55-10:55a 12:25-13:25a 14:45-15:45a 16:35-17:35a 18:15-19:15a",
-    "09:05-09:50a 10:20-11:20u 12:00-12:45a 15:00-16:00a 16:20-17:20a 19:05-20:05a",
-    "08:55-09:55a 11:35-12:35a 14:30-15:30a 16:50-17:50a 18:25-19:10u",
-    "10:00-11:00a 12:50-13:35a 14:50-16:05a 16:25-17:10a 17:40-18:40a",
-    "09:15-10:15a 11:00-11:45u 13:05-13:50a 14:40-15:40a 16:00-17:00a 18:00-19:00a",
-    "09:45-10:45a 12:10-13:10a 14:30-15:15a 15:45-16:45a 17:20-18:20a 19:00-19:45a",
-  ]),
-  profile("hakametsa-ice-hall", "ice-hockey", "Tampere Ice Hall", null, null, [
-    "10:00-11:30u 14:00-15:30a 16:00-17:30a 18:30-19:30a",
-    "09:30-11:00a 13:15-14:15u 15:00-16:30a 17:15-18:15a 19:00-20:00a",
-    "10:30-12:00a 14:20-15:50a 16:20-17:50a 18:15-19:15u",
-    "09:00-10:30a 12:30-13:30a 14:30-16:00a 16:45-18:15a 19:00-19:45a",
-    "11:00-12:30u 14:10-15:40a 16:10-17:10a 17:40-19:10a",
-    "09:45-11:15a 13:00-14:00a 14:45-16:15a 17:00-18:30a 19:15-20:15a",
-    "10:15-11:45a 14:00-15:00u 15:20-16:50a 17:20-18:50a 19:20-20:05u",
-  ]),
-  profile("hakametsa-practice-hall", "figure-skating", "Practice ice hall", null, null, [
-    "09:15-10:15a 12:00-13:00u 14:30-15:30a 16:30-17:45a 18:20-19:20a",
-    "10:20-11:20a 13:10-14:10a 15:15-16:15a 17:00-18:00a 19:10-20:10u",
-    "09:00-10:00a 11:30-12:30a 14:40-15:50a 16:15-17:30a 18:00-19:00a",
-    "10:40-11:50u 13:20-14:20a 14:50-16:05a 16:40-17:40a 18:30-19:45a",
-    "09:30-10:30a 12:15-13:15a 14:30-15:45a 16:00-17:00a 17:30-18:45a 19:15-20:00u",
-    "10:00-11:10a 12:40-13:40u 15:00-16:00a 16:25-17:40a 18:10-19:25a",
-    "09:40-10:50a 11:20-12:20a 14:15-15:15a 15:40-16:55a 17:20-18:35a 19:00-19:50a",
-  ]),
-  profile("hervanta-ice-hall", "ice-hockey", "Two hockey rinks", SHARED_NOTE, "hervanta-ice", [
-    "10:00-11:15a 14:30-16:00a",
-    "09:00-10:20a 13:00-14:00u 14:40-16:10a",
-    "10:15-11:30a 14:30-15:50a",
-    "09:20-10:40a 12:00-13:10a 14:50-16:15a",
-    "10:00-11:20u 14:30-16:00a",
-    "09:45-11:00a 13:20-14:20a 14:45-16:05a",
-    "09:10-10:30a 11:40-12:40a 14:35-15:55a",
-  ]),
-  profile("hervanta-ice-hall", "figure-skating", "Figure skating at Hervanta Ice Hall", SHARED_NOTE, "hervanta-ice", [
-    "16:45-17:45a 18:15-19:30a 20:00-20:45u",
-    "16:30-17:40a 18:00-19:10a 19:40-20:30a",
-    "16:40-18:00a 18:20-19:20u 19:40-20:40a",
-    "16:30-17:20a 17:40-18:50a 19:15-20:15a",
-    "16:35-17:50a 18:10-19:25a 19:50-20:35u",
-    "16:30-17:35a 18:05-19:15a 19:35-20:25a",
-    "16:45-18:05a 18:30-19:40a 20:00-20:50u",
-  ]),
-  profile("pyynikki-skating-field", "outdoor-ice", "Stick-free outdoor skating", OUTDOOR_NOTE, null, [
-    "14:30-15:30u 16:00-17:20a 18:10-19:10a",
-    "15:00-16:15a 16:45-17:30u 18:00-19:15a",
-    "14:45-16:00a 16:30-17:15a 17:45-18:45a",
-    "15:20-16:20a 16:50-18:05a 18:40-19:25u",
-    "14:30-15:45a 16:15-17:00u 17:20-18:35a",
-    "15:10-16:25a 17:00-18:15a 18:45-19:30a",
-    "14:50-15:50u 16:10-17:40a 18:05-19:05a",
-  ]),
-  profile("sorsapuisto-artificial-rink", "outdoor-ice", "Public outdoor skating", OUTDOOR_NOTE, null, [
-    "15:15-16:15a 16:45-17:45u 18:20-19:35a",
-    "14:40-15:55a 16:20-17:05a 17:30-18:45a",
-    "15:30-16:45a 17:15-18:00u 18:15-19:15a",
-    "14:35-15:50u 16:05-17:20a 17:50-19:05a",
-    "15:00-16:00a 16:30-17:45a 18:10-19:00a",
-    "14:45-16:00a 16:20-17:05u 17:25-18:40a",
-    "15:25-16:40a 17:10-18:25a 18:50-19:35u",
-  ]),
-  profile("koulukatu-artificial-ice", "outdoor-ice", "Public skating with and without sticks", OUTDOOR_NOTE, null, [
-    "14:55-16:10a 16:40-17:25a 18:00-19:00u",
-    "15:05-16:05u 16:25-17:40a 18:15-19:30a",
-    "14:30-15:45a 16:15-17:30a 18:00-18:50a",
-    "15:20-16:35a 17:00-17:45u 18:10-19:25a",
-    "14:40-15:40a 16:00-17:15a 17:45-19:00a",
-    "15:15-16:30a 16:55-18:10a 18:40-19:25u",
-    "14:35-15:50a 16:20-17:05a 17:30-18:45a",
-  ]),
-  profile("ahvenisjarvi-public-rink", "outdoor-ice", "Stick-free public skating", OUTDOOR_NOTE, null, [
-    "16:00-17:15a 17:45-18:45a 19:10-19:55u",
-    "14:30-15:40a 16:10-17:25a 18:00-19:00a",
-    "15:10-16:25u 16:50-18:05a 18:30-19:15a",
-    "14:45-16:00a 16:30-17:15a 17:40-18:55a",
-    "15:25-16:40a 17:05-18:20u 18:45-19:45a",
-    "14:35-15:35a 16:00-17:15a 17:40-18:40a",
-    "15:00-16:15a 16:40-17:55a 18:20-19:05u",
-  ]),
-  profile("ahvenisjarvi-stick-rink", "outdoor-ice", "Stick-game rink", OUTDOOR_NOTE, null, [
-    "14:40-15:55a 16:25-17:40a 18:15-19:00u",
-    "15:20-16:35a 17:00-18:15a 18:40-19:40a",
-    "14:30-15:30u 16:00-17:15a 17:45-19:00a",
-    "15:05-16:20a 16:45-18:00a 18:25-19:10a",
-    "14:50-16:05a 16:30-17:15u 17:35-18:50a",
-    "15:30-16:45a 17:10-18:25a 18:50-19:35u",
-    "14:45-16:00a 16:20-17:35a 18:00-19:15a",
-  ]),
-  profile("lielahti-public-rink", "outdoor-ice", "Free public skating", OUTDOOR_NOTE, null, [
-    "15:35-16:50a 17:20-18:20a 18:50-19:35u",
-    "14:30-15:45a 16:15-17:00a 17:25-18:40a",
-    "15:00-16:15a 16:40-17:55u 18:10-19:25a",
-    "14:55-16:10a 16:35-17:50a 18:15-19:00a",
-    "15:40-16:55u 17:15-18:30a 18:55-19:40a",
-    "14:40-15:55a 16:20-17:35a 18:05-19:05a",
-    "15:10-16:25a 16:50-18:05a 18:30-19:15u",
-  ]),
 ]
 
 export function missingScheduleReason(facility: Facility): string | null {
   if (facility.schedule.state === "published-closed") {
     return "The city page says this season has ended, so FastMove does not generate demo sessions that would look open."
+  }
+  if (facility.schedule.state === "not-loaded" || facility.schedule.state === "seasonal-check") {
+    return "Session times are not loaded, so FastMove does not invent a free session."
   }
   if (facility.activities.length === 0) {
     return "No sport is confirmed for this place, so a compatible demo schedule cannot be generated."
@@ -410,7 +284,9 @@ export function formatDemoDate(stamp: string): string {
   const [datePart] = stamp.split("T")
   const [year, month, day] = datePart.split("-").map(Number)
   const date = new Date(year, month - 1, day)
-  return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short" }).format(date)
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(date)
+  const monthName = new Intl.DateTimeFormat("en-GB", { month: "short" }).format(date)
+  return `${weekday}, ${date.getDate()} ${monthName}`
 }
 
 export function formatDemoRange(slot: DemoSlot): string {
@@ -460,9 +336,6 @@ function assertProfilesMatchFacilities(facilities: readonly Facility[]): void {
     if (!activity) throw new Error(`Demo profile ${key} is not a listed activity`)
     if (activity.spaceName !== plan.spaceName) {
       throw new Error(`Demo profile ${key} uses a room that is not in the facility data`)
-    }
-    if (facility.kind === "outdoor-ice-rink" && plan.note !== OUTDOOR_NOTE) {
-      throw new Error(`Outdoor ice profile ${key} is missing its seasonal note`)
     }
   }
 

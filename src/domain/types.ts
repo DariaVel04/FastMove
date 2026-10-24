@@ -122,6 +122,11 @@ export type SupportedActivity = {
   detail: string
   /** Guest calendar link copied from the City of Tampere ticket page. */
   timmiUrl?: string
+  /**
+   * The city page limits this room to clubs or communities.
+   * It stays out of the normal suggestion list.
+   */
+  dropInLimited?: true
 }
 
 export const DEMO_SLOT_SOURCE_LABEL = "DEMO DATA — NOT LIVE AVAILABILITY"
@@ -282,5 +287,7 @@ export type MatchOutcome = {
   confirmed: ScoredMatch[]
   timeExclusions: TimeExclusion[]
   scheduleNotes: ScheduleNote[]
+  /** Ticket rooms the city page does not offer as a normal individual visit. */
+  visitCautions: ScoredMatch[]
   activitySupportedCount: number
 }

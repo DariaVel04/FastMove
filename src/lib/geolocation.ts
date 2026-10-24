@@ -7,10 +7,10 @@ export type LocationRequestResult =
 export const LOCATION_COPY = {
   why: "Used only to estimate this search. Coordinates are not shown or saved.",
   secure: "This works in supported browsers on a secure page, such as HTTPS or localhost.",
-  needed: "Search stays off until location is enabled.",
+  needed: "Choose a saved start point, or enable location for this search.",
   granted: "Location enabled",
   denied:
-    "Location permission was denied. Allow location for this site in the browser, then press Use my location to try again. You can still browse facilities and the map.",
+    "Location permission was denied. Allow location for this site in the browser, then press Use my location to try again. Or choose a saved start point. You can still browse facilities and the map.",
   unavailable:
     "Your location is unavailable right now. Check that location services are on, then press Use my location to try again.",
   timeout: "The location request timed out. Press Use my location to try again.",

@@ -1,17 +1,17 @@
 import { ACTIVITY_IDS, AVAILABLE_MINUTES, TRANSPORT_MODES } from "../domain/types.ts"
 import type { ActivityId, AvailableMinutes, TransportMode } from "../domain/types.ts"
-import { facilitiesForActivity, facilities } from "../data/facilities.ts"
-import { buildDemoSchedule, DEMO_SCHEDULE_PROFILES, describeDemoSlot, overlapsDailyWindow } from "../data/demoSchedule.ts"
+import { facilitiesForActivity, facilities, unmatchedTicketRooms } from "../data/facilities.ts"
+import { buildDemoSchedule, DEMO_SCHEDULE_PROFILES, describeDemoSlot, formatDemoDate, formatDemoRange, overlapsDailyWindow } from "../data/demoSchedule.ts"
 import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, DEMO_NOTICE, DEMO_SCHEDULE_NOTICE } from "../data/sources.ts"
 import { startingPoints } from "../data/startingPoints.ts"
 import { googleMapsDirectionsUrl } from "./directions.ts"
 import { LOCATION_COPY } from "./geolocation.ts"
-import { findMatches } from "./match.ts"
-import { countMatchingOptions, foundOptionsLabel, matchSummaryLines, presentMatches, RESULT_DEMO_NOTE } from "./present.ts"
+import { chooseNearestFittingDemo, findMatches } from "./match.ts"
+import { countMatchingOptions, foundOptionsLabel, matchSummaryLines, presentMatches, RESULT_DEMO_NOTE, ticketCoverageLabel } from "./present.ts"
 import { SCORE_WEIGHTS } from "./scoring.ts"
 import { assessSlotAttendance, formatClock, parseClock, validateSearchTiming } from "./slotMatch.ts"
 import { assessTimeFit, MIN_EXERCISE_MINUTES } from "./timefit.ts"
-import { estimateTravel, TRAVEL_MODEL } from "./travel.ts"
+import { estimateTravel, formatStraightLineDistance, TRAVEL_MODEL } from "./travel.ts"
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
@@ -125,7 +125,8 @@ export function runSelfCheck(): void {
   const tesomaBall = tesomaBasketball.results.find((result) => result.facility.id === "tesoma-ball")
   assert(tesomaBall !== undefined, "Tesoma Sports Hall should fit from Tesoma")
   if (tesomaBall) {
-    assert(tesomaBall.slot !== null && tesomaBall.slot.durationMinutes === 120, "the longer example slot should be chosen")
+    assert(tesomaBall.slot !== null && tesomaBall.slot.exampleWindow.includes("24 Oct"), "Tesoma keeps today's fitting basketball example")
+    assert(tesomaBall.slot !== null && tesomaBall.slot.durationMinutes !== 120, "a longer example on a later day does not replace today")
     assert(tesomaBall.timeFit.exerciseMinutes > 45, "the 45-minute example must not cap a longer fit")
   }
 
@@ -259,12 +260,13 @@ export function runSelfCheck(): void {
   assert(
     swim.results.every(
       (result) =>
-        result.slot?.provenance.status === "demonstration" &&
-        result.windowSlots.every((slot) => slot.isDemo && slot.sport === "swimming"),
+        result.slot === null &&
+        result.windowSlots.length === 0 &&
+        ticketCoverageLabel(result.facility.programme.sourceUrl) === "Not covered by this ticket",
     ),
-    "pool matches use demo swimming slots only",
+    "pools stay outside the ticket and do not receive a fictional session",
   )
-  assert(swim.results.length > 0, "indoor pools have demo slots that can fit")
+  assert(swim.results.length > 0, "indoor pools stay listed without an invented session")
   assert(
     swim.scheduleNotes.some((note) => note.facilityId === "tampere-outdoor-pool"),
     "the ended outdoor-pool season is explained",
@@ -336,8 +338,11 @@ export function runSelfCheck(): void {
     "outdoor rinks stay seasonal",
   )
   assert(
-    outdoor.results.every((result) =>
-      result.reasons.some((reason) => reason.includes("does not treat the place as available right now")),
+    outdoor.results.every(
+      (result) =>
+        result.slot === null &&
+        result.facility.schedule.detail.includes("does not know") &&
+        result.reasons.some((reason) => reason.includes("does not know")),
     ),
     "outdoor rinks are not claimed open now",
   )
@@ -408,7 +413,7 @@ export function runSelfCheck(): void {
   assert(LOCATION_COPY.granted === "Location enabled", "enabled status")
   assert(LOCATION_COPY.denied.includes("try again"), "denied location can be retried")
   assert(LOCATION_COPY.denied.includes("browse"), "denied location keeps browsing usable")
-  assert(LOCATION_COPY.needed.includes("stays off"), "search waits for a real location")
+  assert(LOCATION_COPY.needed.includes("saved start point"), "a saved start point can begin a search")
   assert(!/\d+\.\d+/.test(LOCATION_COPY.granted), "granted copy does not print coordinates")
   assert(!/\d+\.\d+/.test(LOCATION_COPY.why), "location explanation does not print coordinates")
   if (tesomaHall) {
@@ -636,9 +641,19 @@ function checkDemoSchedule(): void {
     .filter((item) => item.state === "unknown")
     .map((item) => item.facilityId)
     .sort()
+  const expectedUnknown = facilities
+    .filter(
+      (facility) => facility.schedule.state !== "demonstration-examples" || facility.activities.length === 0,
+    )
+    .map((facility) => facility.id)
+    .sort()
   assert(
-    unknownIds.join(",") === "kauppi,tampere-outdoor-pool",
-    "unnamed and closed places stay without generated slots",
+    unknownIds.join(",") === expectedUnknown.join(","),
+    "places without a loaded session stay without generated slots",
+  )
+  assert(
+    slots.every((slot) => !expectedUnknown.includes(slot.facilityId)),
+    "pools, ice and unnamed rooms do not receive a fictional session",
   )
   assert(slots.length > 0 && slots.every((slot) => slot.isDemo), "every generated slot is marked as demo")
   assert(
@@ -657,9 +672,7 @@ function checkDemoSchedule(): void {
     )
     if (slot.sport === "swimming") assert(facility?.kind === "swimming-pool", "swimming slots stay in pools")
     if (slot.facilityId === "hakametsa-ice-hall") assert(slot.sport === "ice-hockey", "hockey hall is not figure skating")
-    if (facility?.kind === "outdoor-ice-rink") {
-      assert(slot.conditionsNote !== null && slot.conditionsNote.includes("not verified"), "outdoor ice stays unverified")
-    }
+    assert(facility?.schedule.state === "demonstration-examples", "generated slots stay on ticket demonstration schedules")
   }
   assert(
     slots.every((slot) => slot.startTime.slice(0, 10) >= "2026-10-24" && slot.startTime.slice(0, 10) <= "2026-10-30"),
@@ -685,15 +698,10 @@ function checkDemoSchedule(): void {
     availableStarts("hervanta", "gym").join() !== availableStarts("hervanta", "martial-arts").join(),
     "different sports at one place have different demo times",
   )
-  assert(
-    availableStarts("tampere-swimming-centre", "swimming").join() !==
-      availableStarts("pyynikki-swimming-hall", "swimming").join(),
-    "swimming halls do not share one clock",
-  )
   const schedulable = facilities.flatMap((facility) =>
-    facility.id === "kauppi" || facility.id === "tampere-outdoor-pool"
-      ? []
-      : facility.activities.map((activity) => `${facility.id}|${activity.id}`),
+    facility.schedule.state === "demonstration-examples" && facility.activities.length > 0
+      ? facility.activities.map((activity) => `${facility.id}|${activity.id}`)
+      : [],
   )
   const profileKeys = DEMO_SCHEDULE_PROFILES.map((item) => `${item.facilityId}|${item.sport}`)
   assert(
@@ -820,12 +828,12 @@ function checkDemoSchedule(): void {
 
   assert(
     RESULT_DEMO_NOTE ===
-      "Demo data — illustrative schedules only, not real facility availability.",
+      "Based on illustrative demo schedules — real availability is not verified. Check Timmi before you go.",
     "short demo note",
   )
-  assert(foundOptionsLabel(0) === "Found 0 options", "zero options")
-  assert(foundOptionsLabel(1) === "Found 1 option", "one option")
-  assert(foundOptionsLabel(2) === "Found 2 options", "two options")
+  assert(foundOptionsLabel(0) === "Found 0 matching options", "zero options")
+  assert(foundOptionsLabel(1) === "Found 1 matching option", "one option")
+  assert(foundOptionsLabel(2) === "Found 2 matching options", "two options")
 
   const counted = findMatches(
     {
@@ -878,7 +886,19 @@ function checkDemoSchedule(): void {
     "a sport change does not keep the previous sport",
   )
   assert(countMatchingOptions(onFoot.results) <= countMatchingOptions(counted.results), "transport can only remove matches")
-  const partial = counted.results.find(
+  const clippedSearch = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "14:30",
+      availableUntil: "19:30",
+      maxOutingMinutes: 180,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    fixtureOrigin("keskustori"),
+  )
+  const partial = clippedSearch.results.find(
     (result) => result.chosenInterval !== null && result.timeFit.exerciseMinutes < (result.slot?.durationMinutes ?? 0),
   )
   assert(partial !== undefined && partial.chosenInterval !== null && partial.slot !== null, "a clipped demo interval")
@@ -976,6 +996,196 @@ function checkDemoSchedule(): void {
     tenEachWay.outingMinutes === (tenEachWay.workoutMinutes ?? 0) + 20,
     "TimeFit adds outbound and return travel",
   )
+
+  const centerGym = findMatches(
+    {
+      activityId: "gym",
+      availableFrom: "14:30",
+      availableUntil: "16:00",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    fixtureOrigin("keskustori"),
+  )
+  assert(
+    centerGym.results.some((result) => result.facility.id === "naashalli"),
+    "Keskustori gym search finds Nääshalli",
+  )
+  assert(
+    !centerGym.results.some((result) => result.facility.id === "tampere-stadium"),
+    "the stadium gym is not a normal suggestion",
+  )
+  assert(
+    centerGym.visitCautions.some((result) => result.facility.id === "tampere-stadium"),
+    "the stadium gym stays visible with its visitor limit",
+  )
+  const naashalli = centerGym.results.find((result) => result.facility.id === "naashalli")
+  assert(naashalli?.chosenInterval != null && naashalli.slot != null, "Nääshalli has a chosen interval")
+  if (naashalli?.chosenInterval && naashalli.slot) {
+    const demoLength = naashalli.chosenInterval.demoEndMinutes - naashalli.chosenInterval.demoStartMinutes
+    const usableLength = naashalli.chosenInterval.usableEndMinutes - naashalli.chosenInterval.usableStartMinutes
+    const outing =
+      naashalli.timeFit.outboundMinutes + naashalli.timeFit.exerciseMinutes + naashalli.timeFit.returnMinutes
+    assert(demoLength === naashalli.slot.durationMinutes, "gym demo interval is the original row")
+    assert(usableLength === naashalli.timeFit.exerciseMinutes, "gym usable window matches the workout")
+    assert(outing === 90 && outing <= 90, "gym outing includes both journeys inside 90 minutes")
+    assert(naashalli.timeFit.outboundMinutes > 0 && naashalli.timeFit.returnMinutes === naashalli.timeFit.outboundMinutes, "gym return matches the outbound estimate")
+    const gymLines = matchSummaryLines(naashalli)
+    const gymRow = naashalli.windowSlots.find((slot) => slot.id === naashalli.slot?.id)
+    if (!gymRow) throw new Error("the gym card uses today's fitting row")
+    assert(gymRow.startTime.startsWith("2026-10-24"), "the gym card uses today's fitting row")
+    assert(
+      naashalli.slot.exampleWindow === `${formatDemoDate(gymRow.startTime)} · ${formatDemoRange(gymRow)}`,
+      "the printed gym date comes from the chosen slot",
+    )
+    assert(gymLines[0] === `Demo interval: ${naashalli.slot.exampleWindow}`, "the gym card shows that date")
+    assert(!gymLines.some((line) => line.toLowerCase().includes("available today")), "another day is not called today")
+    assert(gymLines.some((line) => line.startsWith("Suggested workout:")), "gym card states the workout")
+    assert(gymLines.some((line) => line.includes("in a straight line")), "gym card states the straight-line distance")
+    assert(formatStraightLineDistance(naashalli.travel.straightLineKm) !== null, "Nääshalli distance uses both coordinates")
+  }
+  const centerBasketball = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "14:30",
+      availableUntil: "19:30",
+      maxOutingMinutes: 180,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    fixtureOrigin("keskustori"),
+  )
+  assert(centerBasketball.results.length === 2, "Keskustori basketball 180 finds two halls")
+  for (const result of centerBasketball.results) {
+    const interval = result.chosenInterval
+    assert(interval !== null && result.slot !== null, "basketball result has a demo interval")
+    if (!interval || !result.slot) continue
+    const usableLength = interval.usableEndMinutes - interval.usableStartMinutes
+    const outing = result.timeFit.outboundMinutes + result.timeFit.exerciseMinutes + result.timeFit.returnMinutes
+    const chosenRow = result.windowSlots.find((slot) => slot.id === result.slot?.id)
+    if (!chosenRow) throw new Error("basketball keeps today's fitting row")
+    assert(chosenRow.startTime.startsWith("2026-10-24"), "basketball keeps today's fitting row")
+    assert(
+      result.slot.exampleWindow === `${formatDemoDate(chosenRow.startTime)} · ${formatDemoRange(chosenRow)}`,
+      "the printed basketball date comes from the chosen slot",
+    )
+    assert(
+      result.windowSlots.some(
+        (slot) =>
+          slot.status === "demo_available" &&
+          slot.startTime > chosenRow.startTime &&
+          slot.durationMinutes > chosenRow.durationMinutes,
+      ),
+      "a longer later basketball row does not replace today",
+    )
+    assert(usableLength === result.timeFit.exerciseMinutes, "usable basketball window matches the workout")
+    assert(outing <= 180 && outing === result.timeFit.outboundMinutes + result.timeFit.exerciseMinutes + result.timeFit.returnMinutes, "both basketball journeys fit inside the 180 minute outing")
+    assert(result.timeFit.outboundMinutes > 0 && result.timeFit.returnMinutes === result.timeFit.outboundMinutes, "unknown travel is not treated as zero")
+    const lines = matchSummaryLines(result)
+    assert(lines[0] === `Demo interval: ${result.slot.exampleWindow}`, "the card shows the chosen slot date and time")
+    assert(lines.some((line) => line.startsWith("Usable in your window:")), "the card separates the usable period from the demo interval")
+    assert(lines.some((line) => line.includes("in a straight line") && line.includes("Not a routed journey.")), "distance stays labelled as a straight line")
+  }
+  const shortBasketball = findMatches(
+    {
+      activityId: "basketball",
+      availableFrom: "14:30",
+      availableUntil: "19:30",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    fixtureOrigin("keskustori"),
+  )
+  assert(shortBasketball.results.length === 0, "a 90 minute basketball outing from Keskustori has no match")
+  assert(shortBasketball.timeExclusions.length >= 2, "both halls stay outside the 90 minute outing")
+  assert(formatStraightLineDistance(Number.NaN) === null, "a missing distance is not shown as zero")
+  assert(formatStraightLineDistance(0.891) === "About 900 m in a straight line", "sub-kilometre distances round to 50 m")
+  assert(formatStraightLineDistance(6.752) === "About 6.8 km in a straight line", "longer distances round to 0.1 km")
+
+  const todayChoice = chooseNearestFittingDemo(
+    [
+      { startTime: "2026-10-24T14:35", durationMinutes: 85, workoutMinutes: 50 },
+      { startTime: "2026-10-25T15:00", durationMinutes: 120, workoutMinutes: 110 },
+    ],
+    "2026-10-24",
+  )
+  assert(todayChoice?.startTime === "2026-10-24T14:35", "today wins when a later day has a longer workout")
+  const laterChoice = chooseNearestFittingDemo(
+    [
+      { startTime: "2026-10-26T15:00", durationMinutes: 120, workoutMinutes: 110 },
+      { startTime: "2026-10-28T16:00", durationMinutes: 90, workoutMinutes: 90 },
+    ],
+    "2026-10-24",
+  )
+  assert(laterChoice?.startTime === "2026-10-26T15:00", "with no slot today, the nearest fitting day is kept")
+  const outingSkippedToday = chooseNearestFittingDemo(
+    [{ startTime: "2026-10-26T17:20", durationMinutes: 75, workoutMinutes: 75 }],
+    "2026-10-24",
+  )
+  assert(
+    outingSkippedToday?.startTime === "2026-10-26T17:20",
+    "a today row that failed the outing limit is not among the choices",
+  )
+  const eveningGym = findMatches(
+    {
+      activityId: "gym",
+      availableFrom: "17:00",
+      availableUntil: "19:30",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 60,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    fixtureOrigin("keskustori"),
+  )
+  const eveningNaas = eveningGym.results.find((result) => result.facility.id === "naashalli")
+  assert(eveningNaas?.slot != null && !eveningNaas.slot.exampleWindow.includes("24 Oct"), "today's short gym row stays out of the outing")
+  assert(eveningNaas?.slot?.exampleWindow.includes("26 Oct") === true, "the nearest later gym row is shown with its own date")
+  const missingOriginChoice = findMatches(
+    {
+      activityId: "gym",
+      availableFrom: "14:30",
+      availableUntil: "16:00",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "keskustori",
+    },
+    { latitude: Number.NaN, longitude: 23.76 },
+  )
+  assert(missingOriginChoice.results.length === 0 && missingOriginChoice.confirmed.length === 0, "missing coordinates do not become a zero-travel match")
+  const campusGyms = findMatches(
+    {
+      activityId: "gym",
+      availableFrom: "14:30",
+      availableUntil: "16:00",
+      maxOutingMinutes: 90,
+      minWorkoutMinutes: 45,
+      transport: "cycling",
+      startingPointId: "hervanta-campus",
+    },
+    fixtureOrigin("hervanta-campus"),
+  )
+  const hervantaGym = campusGyms.results.find((result) => result.facility.id === "hervanta")
+  const kaukajarviGym = campusGyms.results.find((result) => result.facility.id === "kaukajarvi")
+  assert(hervantaGym?.chosenInterval != null && kaukajarviGym?.chosenInterval != null, "both nearby gyms have a demo interval")
+  if (hervantaGym?.chosenInterval && kaukajarviGym?.chosenInterval) {
+    const hervantaLength = hervantaGym.chosenInterval.demoEndMinutes - hervantaGym.chosenInterval.demoStartMinutes
+    const kaukajarviLength = kaukajarviGym.chosenInterval.demoEndMinutes - kaukajarviGym.chosenInterval.demoStartMinutes
+    assert(hervantaGym.chosenInterval.demoStartMinutes !== kaukajarviGym.chosenInterval.demoStartMinutes, "nearby gym demo intervals start at different times")
+    assert(hervantaLength !== kaukajarviLength, "nearby gym demo intervals have different lengths")
+  }
+  const ticketHall = facilities.find((facility) => facility.id === "hervanta")
+  const pool = facilities.find((facility) => facility.id === "hervanta-swimming-hall")
+  assert(ticketCoverageLabel(ticketHall?.programme.sourceUrl) === "Liikkuva Tampere ticket", "ticket halls keep the ticket label")
+  assert(ticketCoverageLabel(pool?.programme.sourceUrl) === "Not covered by this ticket", "pools stay outside the ticket label")
+  assert(unmatchedTicketRooms.some((room) => room.room === "Courts 1–3"), "Kauppi courts stay unmatched")
+  assert(unmatchedTicketRooms.some((room) => room.room === "Hall B"), "Hall B stays unmatched")
 }
 
 function assertNoSharedConflict(

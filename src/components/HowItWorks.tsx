@@ -4,11 +4,11 @@ import { ExternalLink } from "./ExternalLink.tsx"
 const steps = [
   {
     title: "Choose your activity",
-    text: "Pick a sport, the hours you are free, the longest outing you can spare and the shortest workout you want. Press Use my location so the journey starts from where you are. Travel times are demonstration estimates.",
+    text: "Pick a sport, the hours you are free, the longest outing you can spare and the shortest workout you want. Use your location or a saved start point. Travel times are demonstration estimates, not a routed journey.",
   },
   {
     title: "Find your match",
-    text: "A confirmed slot has to sit inside your window, cover the minimum workout, and fit the outing after travel both ways. Example times stay labelled as examples.",
+    text: "A demo interval has to overlap the hours you are free, cover the minimum workout, and fit the outing after travel both ways. The interval is an example. It does not mean the room is free.",
   },
   {
     title: "Verify in Timmi",
@@ -16,7 +16,7 @@ const steps = [
   },
   {
     title: "Go exercise",
-    text: "Buy a Liikkuva Tampere ticket and have it stamped at the venue. The ticket is for shared use, and a visit can last up to three hours.",
+    text: "Buy a Liikkuva Tampere ticket and have it stamped at the venue. The ticket is for shared use. You can use the facilities for a maximum of 3 hours. That limit is time in the room. FastMove’s outing limit also counts the journey there and back.",
   },
 ]
 

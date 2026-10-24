@@ -241,6 +241,7 @@ export const facilities: Facility[] = [
         detail:
           "The Liikkuva Tampere ticket page lists this gym. The stadium page says the gym is intended for clubs and communities, and points individual visitors to other city gyms.",
         timmiUrl: timmiRoomUrl(5520),
+        dropInLimited: true,
       },
       {
         id: "floorball",
@@ -415,6 +416,43 @@ export const facilities: Facility[] = [
   },
   ...waterAndIceFacilities,
 ]
+
+/**
+ * Ticket rooms named in the facility records that are not a searchable match.
+ * Reasons are copied from those records. This list is not a set of suggestions.
+ */
+export const unmatchedTicketRooms = [
+  {
+    facilityName: "Hervanta Leisure Centre",
+    room: "Reima, Birgitta, Desiree and Eila",
+    reason: "On the ticket page without a named sport, so they are not matched.",
+  },
+  {
+    facilityName: "Kaukajärvi Leisure Centre",
+    room: "Upper gym",
+    reason: "The ticket page lists the lower and upper gyms. This dataset matches the lower gym only.",
+  },
+  {
+    facilityName: "Nääshalli",
+    room: "Sports hall",
+    reason: "The ticket lists a sports hall. The city page does not name a sport for it, so it is not matched.",
+  },
+  {
+    facilityName: "Kauppi Sports Center",
+    room: "Courts 1–3",
+    reason: "The ticket covers these courts. It does not name the sport or link a Timmi room, so they are not matched.",
+  },
+  {
+    facilityName: "Tampere Exhibition and Sports Centre",
+    room: "Hall A coordinate",
+    reason: "Football is matched to hall A. The stored pin is the LIPAS point for hall B, not a confirmed hall A door.",
+  },
+  {
+    facilityName: "Tampere Exhibition and Sports Centre",
+    room: "Hall B",
+    reason: "Hall B is on the ticket and is described as an athletics practice hall. It is not matched to a sport.",
+  },
+] as const
 
 export function facilitiesForActivity(activityId: ActivityId): Facility[] {
   return facilities.filter((facility) => facility.activities.some((activity) => activity.id === activityId))

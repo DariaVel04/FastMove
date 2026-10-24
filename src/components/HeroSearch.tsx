@@ -2,6 +2,7 @@ import type { FormEvent } from "react"
 import { Bike, Bus, Car, Footprints } from "lucide-react"
 import type { ActivityId, MaxOutingMinutes, MinWorkoutMinutes, SearchQuery, TransportMode } from "../domain/types.ts"
 import { MAX_OUTING_OPTIONS, MIN_WORKOUT_OPTIONS, TRANSPORT_MODES } from "../domain/types.ts"
+import { MANUAL_START_IDS, startingPoints } from "../data/startingPoints.ts"
 import { ACTIVITY_GROUPS, ACTIVITY_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { LOCATION_COPY } from "../lib/geolocation.ts"
 import { validateSearchTiming } from "../lib/slotMatch.ts"
@@ -11,6 +12,8 @@ type HeroSearchProps = {
   locating: boolean
   locationReady: boolean
   locationMessage: string
+  manualStartId: string | null
+  onManualStart: (id: string | null) => void
   onChange: (next: SearchQuery) => void
   onUseLocation: () => void
   onSubmit: () => void
@@ -28,6 +31,8 @@ export function HeroSearch({
   locating,
   locationReady,
   locationMessage,
+  manualStartId,
+  onManualStart,
   onChange,
   onUseLocation,
   onSubmit,
@@ -110,6 +115,7 @@ export function HeroSearch({
                 <select
                   id="max-outing"
                   name="max-outing"
+                  aria-describedby="ticket-hours"
                   value={value.maxOutingMinutes}
                   onChange={(event) =>
                     onChange({
@@ -156,6 +162,11 @@ export function HeroSearch({
                 window does not create a free slot.
               </p>
             )}
+            <p className="field-note" id="ticket-hours">
+              Liikkuva Tampere ticket: the facilities can be used for a maximum of 3 hours. The
+              outing limit also counts the journey there and back. The suggested workout is only the
+              time in the room.
+            </p>
           </fieldset>
 
           <fieldset>
@@ -187,6 +198,29 @@ export function HeroSearch({
           </fieldset>
         </div>
 
+        <label className="field" htmlFor="saved-start">
+          Start from
+          <select
+            id="saved-start"
+            name="saved-start"
+            value={manualStartId ?? ""}
+            onChange={(event) => onManualStart(event.target.value || null)}
+          >
+            <option value="">My location, if I allow it</option>
+            {MANUAL_START_IDS.map((id) => {
+              const point = startingPoints.find((item) => item.id === id)
+              return point ? (
+                <option key={point.id} value={point.id}>
+                  {point.name}
+                </option>
+              ) : null
+            })}
+          </select>
+        </label>
+        <p className="field-note">
+          Saved points use coordinates already checked for this project. They are not your live position.
+        </p>
+
         <div className="location-row">
           <button
             className={locationReady ? "secondary-button" : "primary-button location-button"}
@@ -212,7 +246,7 @@ export function HeroSearch({
           {locating
             ? "Finding your location…"
             : locationReady
-              ? "Find my best match"
+              ? "Find matching facilities"
               : "Use my location to search"}
         </button>
       </form>

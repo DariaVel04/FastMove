@@ -45,6 +45,17 @@ export function straightLineKm(from: Point, to: Point): number {
   return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(haversine)))
 }
 
+/** Rounded straight-line label. Null when the distance is missing. */
+export function formatStraightLineDistance(kilometres: number | null | undefined): string | null {
+  if (kilometres == null || !Number.isFinite(kilometres) || kilometres < 0) return null
+  if (kilometres < 1) {
+    const metres = Math.round((kilometres * 1000) / 50) * 50
+    return `About ${metres} m in a straight line`
+  }
+  const rounded = Math.round(kilometres * 10) / 10
+  return `About ${rounded.toFixed(1)} km in a straight line`
+}
+
 export function estimateOneWayMinutes(straightLineKilometres: number, mode: TransportMode): number {
   const roadKm = straightLineKilometres * TRAVEL_MODEL.detourFactor
   const movingMinutes = (roadKm / TRAVEL_MODEL.speedsKmh[mode]) * 60

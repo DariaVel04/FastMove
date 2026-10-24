@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import type { MapOrigin, SearchQuery, SortKey } from "./domain/types.ts"
+import { startingPoints } from "./data/startingPoints.ts"
 import { LOCATION_COPY, requestCurrentLocation } from "./lib/geolocation.ts"
 import { describeActivityGap, describeTimeExclusions, findMatches } from "./lib/match.ts"
 import { presentMatches } from "./lib/present.ts"
@@ -13,7 +14,7 @@ import { Recommendations } from "./components/Recommendations.tsx"
 import { TrustNotice } from "./components/TrustNotice.tsx"
 
 const initialQuery: SearchQuery = {
-  activityId: "basketball",
+  activityId: "gym",
   availableFrom: "14:30",
   availableUntil: "19:30",
   maxOutingMinutes: 90,
@@ -48,6 +49,7 @@ export default function App() {
   const [locationGeneration, setLocationGeneration] = useState(0)
   const [locating, setLocating] = useState(false)
   const [locationMessage, setLocationMessage] = useState<string>(LOCATION_COPY.needed)
+  const [manualStartId, setManualStartId] = useState<string | null>(null)
 
   const formOrigin = deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
   const activeOrigin = submitted?.origin ?? formOrigin
@@ -79,9 +81,23 @@ export default function App() {
     })
   }
 
+  function manualOrigin(): MapOrigin | null {
+    if (!manualStartId) return null
+    const point = startingPoints.find((item) => item.id === manualStartId)
+    if (!point) return null
+    return {
+      id: point.id,
+      name: point.name,
+      detail: point.address,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      sourceNote: point.coordinateSource.note,
+    }
+  }
+
   async function handleSubmit() {
     if (validateSearchTiming(query)) return
-    const origin = formOrigin ?? (await handleUseLocation())
+    const origin = manualOrigin() ?? formOrigin ?? (await handleUseLocation())
     if (!origin) return
     showResults(origin)
   }
@@ -147,8 +163,10 @@ export default function App() {
         <HeroSearch
           value={query}
           locating={locating}
-          locationReady={deviceFix !== null && !locating}
+          locationReady={(deviceFix !== null || manualStartId !== null) && !locating}
           locationMessage={locationMessage}
+          manualStartId={manualStartId}
+          onManualStart={setManualStartId}
           onChange={setQuery}
           onUseLocation={() => {
             void handleUseLocation()
@@ -164,6 +182,7 @@ export default function App() {
             activityGapText={activityGapText}
             scheduleNotes={outcome?.scheduleNotes ?? []}
             timeExclusions={outcome?.timeExclusions ?? []}
+            visitCautions={outcome?.visitCautions ?? []}
             minWorkoutMinutes={submitted?.query.minWorkoutMinutes ?? query.minWorkoutMinutes}
             transport={submitted?.query.transport ?? null}
             sort={sort}

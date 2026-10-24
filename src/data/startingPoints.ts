@@ -78,3 +78,6 @@ export const startingPoints: StartingPoint[] = [
 ]
 
 export const DEFAULT_STARTING_POINT_ID = "hervanta-campus"
+
+/** Saved points a search can use when device location is off. Coordinates stay in this file. */
+export const MANUAL_START_IDS = ["keskustori", "hervanta-campus", "tesoma"] as const
