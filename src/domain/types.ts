@@ -24,6 +24,16 @@ export const AVAILABLE_MINUTES = [60, 90, 120, 180] as const
 
 export type AvailableMinutes = (typeof AVAILABLE_MINUTES)[number]
 
+/** Maximum time for the whole outing, including travel both ways. */
+export const MAX_OUTING_OPTIONS = [45, 60, 90, 120, 180] as const
+
+export type MaxOutingMinutes = (typeof MAX_OUTING_OPTIONS)[number]
+
+/** Shortest workout the user still wants. */
+export const MIN_WORKOUT_OPTIONS = [30, 45, 60, 90] as const
+
+export type MinWorkoutMinutes = (typeof MIN_WORKOUT_OPTIONS)[number]
+
 export const TRANSPORT_MODES = ["walking", "cycling", "public-transport", "car"] as const
 
 export type TransportMode = (typeof TRANSPORT_MODES)[number]
@@ -32,7 +42,12 @@ export type SortKey = "relevance" | "travel"
 
 export type SearchQuery = {
   activityId: ActivityId
-  availableMinutes: AvailableMinutes
+  /** Same-day clock time, `HH:MM`. */
+  availableFrom: string
+  /** Same-day clock time, `HH:MM`. Must be later than availableFrom. */
+  availableUntil: string
+  maxOutingMinutes: MaxOutingMinutes
+  minWorkoutMinutes: MinWorkoutMinutes
   transport: TransportMode
   startingPointId: string
 }
@@ -107,6 +122,34 @@ export type SupportedActivity = {
   detail: string
   /** Guest calendar link copied from the City of Tampere ticket page. */
   timmiUrl?: string
+}
+
+export const DEMO_SLOT_SOURCE_LABEL = "DEMO DATA — NOT LIVE AVAILABILITY"
+
+export type DemoSlotStatus = "demo_available" | "demo_unavailable" | "unknown"
+
+/** A fictional timetable row. Never a live booking. */
+export type DemoSlot = {
+  id: string
+  facilityId: string
+  sport: ActivityId
+  /** Local date and time, `YYYY-MM-DDTHH:mm`, without a UTC shift. */
+  startTime: string
+  endTime: string
+  status: DemoSlotStatus
+  isDemo: true
+  sourceLabel: typeof DEMO_SLOT_SOURCE_LABEL
+  durationMinutes: number
+  spaceName: string
+  /** Set when the row must not be read as a real open session, such as outdoor ice. */
+  conditionsNote: string | null
+}
+
+export type ScheduleCoverage = {
+  facilityId: string
+  state: "demo-generated" | "unknown"
+  reason: string | null
+  slotCount: number
 }
 
 export type AvailabilitySlot = {
@@ -195,6 +238,8 @@ export type ScoredMatch = {
   activity: SupportedActivity
   /** Null when the place is confirmed but no session length is on record. */
   slot: AvailabilitySlot | null
+  /** Demo rows inside the searched time of day. Includes unavailable illustrations. */
+  windowSlots: DemoSlot[]
   travel: TravelEstimate
   timeFit: TimeFit
   score: ScoreBreakdown
@@ -212,10 +257,19 @@ export type TimeExclusion = {
   facilityId: string
   facilityName: string
   bestRemainingMinutes: number
+  outboundMinutes: number
+  returnMinutes: number
+  windowSlots: DemoSlot[]
 }
 
 export type MatchOutcome = {
+  /** Demonstration examples and places whose calendars are not loaded. Not confirmed free slots. */
   results: ScoredMatch[]
+  /**
+   * Slots whose start and end came from a booking or public-session source.
+   * This stays empty until such a source is connected. It is not filled with examples.
+   */
+  confirmed: ScoredMatch[]
   timeExclusions: TimeExclusion[]
   scheduleNotes: ScheduleNote[]
   activitySupportedCount: number

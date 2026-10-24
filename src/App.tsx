@@ -2,7 +2,8 @@ import { useMemo, useState } from "react"
 import type { MapOrigin, SearchQuery, SortKey } from "./domain/types.ts"
 import { LOCATION_COPY, requestCurrentLocation } from "./lib/geolocation.ts"
 import { describeActivityGap, describeTimeExclusions, findMatches } from "./lib/match.ts"
-import { LONGER_VISIT_MINUTES, presentMatches } from "./lib/present.ts"
+import { presentMatches } from "./lib/present.ts"
+import { validateSearchTiming } from "./lib/slotMatch.ts"
 import { Footer } from "./components/Footer.tsx"
 import { FacilityMap } from "./components/FacilityMap.tsx"
 import { Header } from "./components/Header.tsx"
@@ -13,7 +14,10 @@ import { TrustNotice } from "./components/TrustNotice.tsx"
 
 const initialQuery: SearchQuery = {
   activityId: "basketball",
-  availableMinutes: 90,
+  availableFrom: "14:30",
+  availableUntil: "19:30",
+  maxOutingMinutes: 90,
+  minWorkoutMinutes: 45,
   transport: "cycling",
   startingPointId: "hervanta-campus",
 }
@@ -39,13 +43,11 @@ export default function App() {
   const [query, setQuery] = useState<SearchQuery>(initialQuery)
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null)
   const [sort, setSort] = useState<SortKey>("relevance")
-  const [requireLongerVisit, setRequireLongerVisit] = useState(false)
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
   const [deviceFix, setDeviceFix] = useState<{ latitude: number; longitude: number } | null>(null)
   const [locationGeneration, setLocationGeneration] = useState(0)
   const [locating, setLocating] = useState(false)
   const [locationMessage, setLocationMessage] = useState<string>(LOCATION_COPY.needed)
-  const [exploreFacilities, setExploreFacilities] = useState(false)
 
   const formOrigin = deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
   const activeOrigin = submitted?.origin ?? formOrigin
@@ -59,18 +61,14 @@ export default function App() {
       outcome
         ? presentMatches(outcome.results, {
             sort,
-            minimumExerciseMinutes: requireLongerVisit ? LONGER_VISIT_MINUTES : null,
+            minimumExerciseMinutes: null,
           })
         : [],
-    [outcome, requireLongerVisit, sort],
+    [outcome, sort],
   )
 
-  function handleSubmit() {
-    if (!formOrigin) {
-      setLocationMessage(LOCATION_COPY.needed)
-      return
-    }
-    setSubmitted({ query, origin: formOrigin })
+  function showResults(origin: MapOrigin) {
+    setSubmitted({ query, origin })
     setSelectedFacilityId(null)
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     requestAnimationFrame(() => {
@@ -79,6 +77,13 @@ export default function App() {
         block: "start",
       })
     })
+  }
+
+  async function handleSubmit() {
+    if (validateSearchTiming(query)) return
+    const origin = formOrigin ?? (await handleUseLocation())
+    if (!origin) return
+    showResults(origin)
   }
 
   function scrollToId(id: string) {
@@ -99,7 +104,7 @@ export default function App() {
     scrollToId(`result-${facilityId}`)
   }
 
-  async function handleUseLocation() {
+  async function handleUseLocation(): Promise<MapOrigin | null> {
     setLocating(true)
     const result = await requestCurrentLocation()
     setLocating(false)
@@ -108,11 +113,14 @@ export default function App() {
       setLocationMessage(
         deviceFix ? `${problem} The last enabled location is still used for search.` : problem,
       )
-      return
+      return deviceFix ? deviceOrigin(deviceFix, locationGeneration) : null
     }
-    setDeviceFix({ latitude: result.latitude, longitude: result.longitude })
-    setLocationGeneration((current) => current + 1)
+    const fix = { latitude: result.latitude, longitude: result.longitude }
+    const nextGeneration = locationGeneration + 1
+    setDeviceFix(fix)
+    setLocationGeneration(nextGeneration)
     setLocationMessage(LOCATION_COPY.granted)
+    return deviceOrigin(fix, nextGeneration)
   }
 
   const timeExclusionText =
@@ -120,7 +128,8 @@ export default function App() {
       ? describeTimeExclusions(
           outcome.timeExclusions,
           submitted.query.activityId,
-          submitted.query.availableMinutes,
+          submitted.query.maxOutingMinutes,
+          submitted.query.minWorkoutMinutes,
         )
       : null
   const activityGapText =
@@ -140,12 +149,10 @@ export default function App() {
           locating={locating}
           locationReady={deviceFix !== null && !locating}
           locationMessage={locationMessage}
-          exploreFacilities={exploreFacilities}
           onChange={setQuery}
           onUseLocation={() => {
             void handleUseLocation()
           }}
-          onExploreChange={setExploreFacilities}
           onSubmit={handleSubmit}
         />
         <TrustNotice />
@@ -153,21 +160,20 @@ export default function App() {
           <Recommendations
             hasSearched={submitted !== null}
             visible={visible}
-            matchedCount={outcome?.results.length ?? 0}
             timeExclusionText={timeExclusionText}
             activityGapText={activityGapText}
             scheduleNotes={outcome?.scheduleNotes ?? []}
+            timeExclusions={outcome?.timeExclusions ?? []}
+            minWorkoutMinutes={submitted?.query.minWorkoutMinutes ?? query.minWorkoutMinutes}
+            transport={submitted?.query.transport ?? null}
             sort={sort}
-            requireLongerVisit={requireLongerVisit}
             selectedFacilityId={selectedFacilityId}
             onSortChange={setSort}
-            onRequireLongerVisitChange={setRequireLongerVisit}
             onShowOnMap={handleShowOnMap}
             directionsOrigin={submitted?.origin ?? null}
           />
           <FacilityMap
             start={activeOrigin}
-            highlightedActivityId={exploreFacilities ? query.activityId : null}
             results={visible}
             selectedFacilityId={selectedFacilityId}
             hasSearched={submitted !== null}

@@ -1,5 +1,6 @@
 import type {
   AvailabilitySlot,
+  DemoSlot,
   Facility,
   MatchOutcome,
   ScoredMatch,
@@ -9,22 +10,13 @@ import type {
   TimeExclusion,
   TimeFit,
 } from "../domain/types.ts"
+import { buildDemoSchedule, clockMinutes, formatDemoDate, formatDemoRange, overlapsDailyWindow } from "../data/demoSchedule.ts"
 import { ACTIVITY_CATALOG, ACTIVITY_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { facilities } from "../data/facilities.ts"
 import { DEMONSTRATION_CONFIDENCE, scoreMatch, SESSION_UNKNOWN_CONFIDENCE } from "./scoring.ts"
-import { assessTimeFit, assessUnscheduledVisit } from "./timefit.ts"
+import { assessSlotAttendance, parseClock } from "./slotMatch.ts"
+import { assessUnscheduledVisit } from "./timefit.ts"
 import { estimateTravel } from "./travel.ts"
-
-function compareSlots(
-  left: { fit: TimeFit; slot: AvailabilitySlot },
-  right: { fit: TimeFit; slot: AvailabilitySlot },
-): number {
-  return (
-    right.fit.exerciseMinutes - left.fit.exerciseMinutes ||
-    left.slot.durationMinutes - right.slot.durationMinutes ||
-    left.slot.id.localeCompare(right.slot.id)
-  )
-}
 
 function buildReasons(
   activity: SupportedActivity,
@@ -61,8 +53,31 @@ function buildReasons(
     )
   }
 
-  reasons.push("This availability is a demonstration example and has not been checked in Timmi.")
+  reasons.push(
+    "This availability is a fictional demo slot and has not been checked in Timmi. The labelled window is not a confirmed start and end.",
+  )
+  if (facility.schedule.state === "seasonal-check") {
+    reasons.push(
+      "Real ice conditions are not verified. This demo schedule does not treat the place as available right now.",
+    )
+  }
   return reasons
+}
+
+function demoToAvailability(demo: DemoSlot): AvailabilitySlot {
+  return {
+    id: demo.id,
+    activityId: demo.sport,
+    spaceName: demo.spaceName,
+    durationMinutes: demo.durationMinutes,
+    exampleWindow: `${formatDemoDate(demo.startTime)} ${formatDemoRange(demo)}`,
+    provenance: {
+      status: "demonstration",
+      sourceName: demo.sourceLabel,
+      verifiedInTimmi: false,
+      summary: "Fictional demonstration slot for this search. It is not a booking and it was not read from Timmi.",
+    },
+  }
 }
 
 export function findMatches(
@@ -71,13 +86,16 @@ export function findMatches(
 ): MatchOutcome {
   const start = origin ?? null
   if (!start || !Number.isFinite(start.latitude) || !Number.isFinite(start.longitude)) {
-    return { results: [], timeExclusions: [], scheduleNotes: [], activitySupportedCount: 0 }
+    return { results: [], confirmed: [], timeExclusions: [], scheduleNotes: [], activitySupportedCount: 0 }
   }
 
   const results: ScoredMatch[] = []
   const timeExclusions: TimeExclusion[] = []
   const scheduleNotes: ScheduleNote[] = []
   let activitySupportedCount = 0
+  const demoSchedule = buildDemoSchedule(facilities)
+  const windowStart = parseClock(query.availableFrom) ?? 0
+  const windowEnd = parseClock(query.availableUntil) ?? 0
 
   for (const facility of facilities) {
     const activity = facility.activities.find((item) => item.id === query.activityId)
@@ -93,22 +111,29 @@ export function findMatches(
       continue
     }
 
-    const slots = facility.slots.filter(
-      (slot) =>
-        slot.activityId === query.activityId &&
-        slot.provenance.status === "demonstration" &&
-        slot.provenance.verifiedInTimmi === false,
+    const sportSlots = demoSchedule.slots.filter(
+      (slot) => slot.facilityId === facility.id && slot.sport === query.activityId,
     )
     const travel = estimateTravel(start, facility, query.transport)
+    const windowSlots = sportSlots.filter((slot) =>
+      overlapsDailyWindow(slot, query.availableFrom, query.availableUntil),
+    )
 
-    if (slots.length === 0) {
+    if (sportSlots.length === 0) {
       if (facility.schedule.state === "demonstration-examples") continue
-      const fit = assessUnscheduledVisit(query.availableMinutes, travel.outboundMinutes)
+      const fit = assessUnscheduledVisit(
+        query.maxOutingMinutes,
+        travel.outboundMinutes,
+        query.minWorkoutMinutes,
+      )
       if (!fit.fits) {
         timeExclusions.push({
           facilityId: facility.id,
           facilityName: facility.name,
           bestRemainingMinutes: fit.remainingMinutes,
+          outboundMinutes: travel.outboundMinutes,
+          returnMinutes: travel.returnMinutes,
+          windowSlots: [],
         })
         continue
       }
@@ -117,6 +142,7 @@ export function findMatches(
         facility,
         activity,
         slot: null,
+        windowSlots: [],
         travel,
         timeFit: fit,
         score: scoreMatch({
@@ -130,49 +156,85 @@ export function findMatches(
       continue
     }
 
-    const evaluated = slots.map((slot) => ({
-      slot,
-      fit: assessTimeFit(query.availableMinutes, travel.outboundMinutes, slot.durationMinutes),
-    }))
-    const fitting = evaluated.filter((item) => item.fit.fits).sort(compareSlots)
+    if (windowSlots.length === 0) continue
+
+    const evaluated = windowSlots
+      .filter((slot) => slot.status === "demo_available")
+      .map((demo) => ({
+        demo,
+        assessment: assessSlotAttendance(
+          {
+            startMinutes: clockMinutes(demo.startTime),
+            endMinutes: clockMinutes(demo.endTime),
+            kind: "demo-interval",
+            activityId: demo.sport,
+            fixedSession: false,
+          },
+          {
+            windowStart,
+            windowEnd,
+            maxOutingMinutes: query.maxOutingMinutes,
+            minWorkoutMinutes: query.minWorkoutMinutes,
+            outboundMinutes: travel.outboundMinutes,
+            returnMinutes: travel.returnMinutes,
+            selectedActivityId: query.activityId,
+          },
+        ),
+      }))
+    const fitting = evaluated
+      .filter((item) => item.assessment.fits && item.assessment.workoutMinutes !== null)
+      .sort(
+        (left, right) =>
+          (right.assessment.workoutMinutes ?? 0) - (left.assessment.workoutMinutes ?? 0) ||
+          right.demo.durationMinutes - left.demo.durationMinutes ||
+          left.demo.startTime.localeCompare(right.demo.startTime),
+      )
 
     if (fitting.length === 0) {
-      const bestRemainingMinutes = Math.max(...evaluated.map((item) => item.fit.remainingMinutes))
       timeExclusions.push({
         facilityId: facility.id,
         facilityName: facility.name,
-        bestRemainingMinutes,
+        bestRemainingMinutes: query.maxOutingMinutes - travel.roundTripMinutes,
+        outboundMinutes: travel.outboundMinutes,
+        returnMinutes: travel.returnMinutes,
+        windowSlots,
       })
       continue
     }
 
     const chosen = fitting[0]
+    const workoutMinutes = chosen.assessment.workoutMinutes ?? 0
+    const fit: TimeFit = {
+      outboundMinutes: travel.outboundMinutes,
+      returnMinutes: travel.returnMinutes,
+      roundTripMinutes: travel.roundTripMinutes,
+      remainingMinutes: query.maxOutingMinutes - travel.roundTripMinutes,
+      exerciseMinutes: workoutMinutes,
+      sessionKnown: true,
+      fits: true,
+    }
+    const slot = demoToAvailability(chosen.demo)
     const score = scoreMatch({
-      roundTripMinutes: chosen.fit.roundTripMinutes,
-      exerciseMinutes: chosen.fit.exerciseMinutes,
+      roundTripMinutes: fit.roundTripMinutes,
+      exerciseMinutes: fit.exerciseMinutes,
       dataConfidence: DEMONSTRATION_CONFIDENCE,
     })
 
     results.push({
       facility,
       activity,
-      slot: chosen.slot,
+      slot,
+      windowSlots,
       travel,
-      timeFit: chosen.fit,
+      timeFit: fit,
       score,
-      reasons: buildReasons(
-        activity,
-        TRANSPORT_LABELS[query.transport],
-        chosen.fit,
-        chosen.slot,
-        facility,
-      ),
+      reasons: buildReasons(activity, TRANSPORT_LABELS[query.transport], fit, slot, facility),
       isBest: false,
     })
   }
 
   results.sort(compareRelevance)
-  return { results, timeExclusions, scheduleNotes, activitySupportedCount }
+  return { results, confirmed: [], timeExclusions, scheduleNotes, activitySupportedCount }
 }
 
 export function compareRelevance(left: ScoredMatch, right: ScoredMatch): number {
@@ -186,12 +248,13 @@ export function compareRelevance(left: ScoredMatch, right: ScoredMatch): number 
 export function describeTimeExclusions(
   exclusions: TimeExclusion[],
   activityId: SearchQuery["activityId"],
-  availableMinutes: number,
+  maxOutingMinutes: number,
+  minWorkoutMinutes: number,
 ): string | null {
   if (exclusions.length === 0) return null
   const names = exclusions.map((item) => item.facilityName).join(", ")
   const verb = exclusions.length === 1 ? "supports" : "support"
-  return `${names} ${verb} ${ACTIVITY_LABELS[activityId]}. The estimated journey does not leave 30 minutes to exercise inside a ${availableMinutes}-minute window.`
+  return `${names} ${verb} ${ACTIVITY_LABELS[activityId]}. The estimated journey does not leave ${minWorkoutMinutes} minutes to exercise inside a ${maxOutingMinutes}-minute outing. This does not mean the facilities are fully booked.`
 }
 
 export function describeActivityGap(activityId: SearchQuery["activityId"]): string {

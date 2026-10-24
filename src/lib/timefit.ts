@@ -15,6 +15,7 @@ export function assessTimeFit(
   availableMinutes: number,
   oneWayMinutes: number,
   slotDurationMinutes: number,
+  minWorkoutMinutes: number = MIN_EXERCISE_MINUTES,
 ): TimeFit {
   const outboundMinutes = oneWayMinutes
   const returnMinutes = oneWayMinutes
@@ -22,8 +23,8 @@ export function assessTimeFit(
   const remainingMinutes = availableMinutes - roundTripMinutes
   const exerciseMinutes = Math.max(0, Math.min(remainingMinutes, slotDurationMinutes))
   const fits =
-    remainingMinutes >= MIN_EXERCISE_MINUTES &&
-    exerciseMinutes >= MIN_EXERCISE_MINUTES &&
+    remainingMinutes >= minWorkoutMinutes &&
+    exerciseMinutes >= minWorkoutMinutes &&
     exerciseMinutes <= slotDurationMinutes
 
   return {
@@ -41,7 +42,11 @@ export function assessTimeFit(
  * Used when a confirmed place has no session length on record.
  * The journey can still leave 30 minutes, but that remainder is not a booked session.
  */
-export function assessUnscheduledVisit(availableMinutes: number, oneWayMinutes: number): TimeFit {
+export function assessUnscheduledVisit(
+  availableMinutes: number,
+  oneWayMinutes: number,
+  minWorkoutMinutes: number = MIN_EXERCISE_MINUTES,
+): TimeFit {
   const outboundMinutes = oneWayMinutes
   const returnMinutes = oneWayMinutes
   const roundTripMinutes = outboundMinutes + returnMinutes
@@ -55,6 +60,6 @@ export function assessUnscheduledVisit(availableMinutes: number, oneWayMinutes: 
     remainingMinutes,
     exerciseMinutes,
     sessionKnown: false,
-    fits: remainingMinutes >= MIN_EXERCISE_MINUTES,
+    fits: remainingMinutes >= minWorkoutMinutes,
   }
 }

@@ -1,11 +1,10 @@
 import { useEffect, useRef } from "react"
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet"
-import type { ActivityId, Facility, MapOrigin, ScoredMatch } from "../domain/types.ts"
+import type { Facility, MapOrigin, ScoredMatch } from "../domain/types.ts"
 import { facilities } from "../data/facilities.ts"
 
 type FacilityMapProps = {
   start: MapOrigin | null
-  highlightedActivityId: ActivityId | null
   results: ScoredMatch[]
   selectedFacilityId: string | null
   hasSearched: boolean
@@ -42,11 +41,6 @@ export function FacilityMap(props: FacilityMapProps) {
         <li>
           <span className="swatch swatch--match" /> Other match
         </li>
-        {props.highlightedActivityId ? (
-          <li>
-            <span className="swatch swatch--listed" /> Listed for this activity
-          </li>
-        ) : null}
         <li>
           <span className="swatch swatch--idle" /> Listed place
         </li>
@@ -66,7 +60,6 @@ export function FacilityMap(props: FacilityMapProps) {
 
 function MapCanvas({
   start,
-  highlightedActivityId,
   results,
   selectedFacilityId,
   hasSearched,
@@ -102,16 +95,11 @@ function MapCanvas({
       ) : null}
       {facilities.map((facility) => {
         const match = results.find((result) => result.facility.id === facility.id)
-        const listed =
-          highlightedActivityId !== null &&
-          facility.activities.some((activity) => activity.id === highlightedActivityId)
         return (
           <FacilityMarker
             key={facility.id}
             facility={facility}
             match={match}
-            listed={listed}
-            highlightedActivityId={highlightedActivityId}
             selected={selectedFacilityId === facility.id}
             onSelect={onSelect}
           />
@@ -121,22 +109,12 @@ function MapCanvas({
   )
 }
 
-function describeMarker(
-  facility: Facility,
-  match: ScoredMatch | undefined,
-  highlightedActivityId: ActivityId | null,
-): string {
+function describeMarker(facility: Facility, match: ScoredMatch | undefined): string {
   if (match) {
     if (!match.timeFit.sessionKnown) {
       return `${match.activity.spaceName}. Demonstration travel estimate: ${match.timeFit.outboundMinutes} min each way. Session length is not confirmed. ${match.facility.schedule.label}.`
     }
     return `${match.activity.spaceName}. Demonstration estimate: ${match.timeFit.outboundMinutes} min each way, ${match.timeFit.exerciseMinutes} min to exercise.`
-  }
-  if (highlightedActivityId) {
-    const rooms = facility.activities
-      .filter((activity) => activity.id === highlightedActivityId)
-      .map((activity) => activity.spaceName)
-    if (rooms.length > 0) return `Listed for the selected activity: ${rooms.join("; ")}.`
   }
   const spaces = facility.activities.map((activity) => activity.spaceName).join(", ")
   const parts = [
@@ -149,21 +127,17 @@ function describeMarker(
 function FacilityMarker({
   facility,
   match,
-  listed,
-  highlightedActivityId,
   selected,
   onSelect,
 }: {
   facility: Facility
   match: ScoredMatch | undefined
-  listed: boolean
-  highlightedActivityId: ActivityId | null
   selected: boolean
   onSelect: (facilityId: string) => void
 }) {
   const isBest = match?.isBest === true
-  const fillColor = isBest ? "#d8f25a" : match ? "#1e5340" : listed ? "#5f8f78" : "#c8bfb2"
-  const radius = selected ? 13 : isBest ? 11 : match ? 9 : listed ? 8 : 6
+  const fillColor = isBest ? "#d8f25a" : match ? "#1e5340" : "#c8bfb2"
+  const radius = selected ? 13 : isBest ? 11 : match ? 9 : 6
 
   return (
     <CircleMarker
@@ -179,7 +153,7 @@ function FacilityMarker({
         <br />
         {facility.coordinateSource.note}
         <br />
-        {describeMarker(facility, match, listed ? highlightedActivityId : null)}
+        {describeMarker(facility, match)}
       </Popup>
     </CircleMarker>
   )

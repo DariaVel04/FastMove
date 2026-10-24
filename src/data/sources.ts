@@ -28,6 +28,13 @@ export const PROGRAMME_PAGE_UPDATED = "15 October 2026"
 export const DEMO_NOTICE =
   "Demonstration availability only. Always check the current booking status in Timmi before purchasing a Liikkuva Tampere ticket."
 
+export const DEMO_SCHEDULE_NOTICE =
+  "Demo schedules are fictional examples created to demonstrate FastMove’s search and matching features. They do not represent actual facility bookings or availability. Check the official facility schedule before visiting."
+
+/** Shown when a search has no booking intervals. Not a claim that halls are full. */
+export const NO_CONFIRMED_SLOTS =
+  "No matching confirmed slots were found in the available data. FastMove does not read Timmi bookings, so this does not mean every facility is fully booked. Open the official calendar, or change your window, maximum outing or minimum workout."
+
 export const ACTIVITY_LABELS = {
   gym: "Gym / Fitness",
   "functional-training": "Functional Training",

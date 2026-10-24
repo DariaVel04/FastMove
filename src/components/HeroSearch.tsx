@@ -1,20 +1,18 @@
 import type { FormEvent } from "react"
 import { Bike, Bus, Car, Footprints } from "lucide-react"
-import type { ActivityId, AvailableMinutes, SearchQuery, TransportMode } from "../domain/types.ts"
-import { AVAILABLE_MINUTES, TRANSPORT_MODES } from "../domain/types.ts"
-import { facilitiesForActivity } from "../data/facilities.ts"
-import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, ACTIVITY_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
+import type { ActivityId, MaxOutingMinutes, MinWorkoutMinutes, SearchQuery, TransportMode } from "../domain/types.ts"
+import { MAX_OUTING_OPTIONS, MIN_WORKOUT_OPTIONS, TRANSPORT_MODES } from "../domain/types.ts"
+import { ACTIVITY_GROUPS, ACTIVITY_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { LOCATION_COPY } from "../lib/geolocation.ts"
+import { validateSearchTiming } from "../lib/slotMatch.ts"
 
 type HeroSearchProps = {
   value: SearchQuery
   locating: boolean
   locationReady: boolean
   locationMessage: string
-  exploreFacilities: boolean
   onChange: (next: SearchQuery) => void
   onUseLocation: () => void
-  onExploreChange: (next: boolean) => void
   onSubmit: () => void
 }
 
@@ -30,15 +28,12 @@ export function HeroSearch({
   locating,
   locationReady,
   locationMessage,
-  exploreFacilities,
   onChange,
   onUseLocation,
-  onExploreChange,
   onSubmit,
 }: HeroSearchProps) {
-  const activity = ACTIVITY_CATALOG[value.activityId]
   const locationStatus = locating ? "Finding your location…" : locationMessage
-  const listed = facilitiesForActivity(value.activityId)
+  const timingError = validateSearchTiming(value)
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,8 +46,8 @@ export function HeroSearch({
         <p className="eyebrow">Find your spot. Make your move.</p>
         <h1 id="hero-title">Make time for movement.</h1>
         <p className="lede">
-          Rank a Tampere sports facility that fits your activity and the minutes you still have
-          after getting there and back.
+          Look for a Tampere sports slot inside the hours you are free, including the journey there
+          and back.
         </p>
       </div>
       <form className="search-card" onSubmit={handleSubmit}>
@@ -76,55 +71,91 @@ export function HeroSearch({
               ))}
             </select>
           </label>
-          <p className="field-note">
-            {activity.status === "needs-verification" ? "Needs verification. " : "City-listed. "}
-            {activity.summary} {listed.length === 0 ? "No listed facility." : `${listed.length} listed.`}
-          </p>
-          <label className="check-field">
-            <input
-              type="checkbox"
-              checked={exploreFacilities}
-              onChange={(event) => onExploreChange(event.target.checked)}
-            />
-            Highlight facilities for this activity
-          </label>
-          {exploreFacilities ? (
-            listed.length > 0 ? (
-              <ul className="explore-list">
-                {listed.map((facility) => {
-                  const rooms = facility.activities.filter((item) => item.id === value.activityId)
-                  return (
-                    <li key={facility.id}>
-                      {facility.name}: {rooms.map((room) => room.spaceName).join("; ")}
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <p className="field-note">No facility in this programme list confirms the activity.</p>
-            )
-          ) : null}
         </fieldset>
 
         <div className="search-grid">
           <fieldset>
-            <legend>Available time</legend>
-            <div className="choice-row">
-              {AVAILABLE_MINUTES.map((minutes) => (
-                <label className="choice" key={minutes}>
-                  <input
-                    type="radio"
-                    name="available-time"
-                    value={minutes}
-                    checked={value.availableMinutes === minutes}
-                    onChange={() =>
-                      onChange({ ...value, availableMinutes: minutes as AvailableMinutes })
-                    }
-                  />
-                  <span>{minutes} min</span>
-                </label>
-              ))}
+            <legend>When you are free</legend>
+            <div className="time-grid">
+              <label className="field" htmlFor="available-from">
+                Available from
+                <input
+                  id="available-from"
+                  name="available-from"
+                  type="time"
+                  required
+                  value={value.availableFrom}
+                  onChange={(event) => onChange({ ...value, availableFrom: event.target.value })}
+                />
+              </label>
+              <label className="field" htmlFor="available-until">
+                Available until
+                <input
+                  id="available-until"
+                  name="available-until"
+                  type="time"
+                  required
+                  value={value.availableUntil}
+                  onChange={(event) => onChange({ ...value, availableUntil: event.target.value })}
+                />
+              </label>
             </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Outing limits</legend>
+            <div className="time-grid">
+              <label className="field" htmlFor="max-outing">
+                Maximum total outing
+                <select
+                  id="max-outing"
+                  name="max-outing"
+                  value={value.maxOutingMinutes}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      maxOutingMinutes: Number(event.target.value) as MaxOutingMinutes,
+                    })
+                  }
+                >
+                  {MAX_OUTING_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes} min, including travel both ways
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field" htmlFor="min-workout">
+                Minimum workout
+                <select
+                  id="min-workout"
+                  name="min-workout"
+                  value={value.minWorkoutMinutes}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      minWorkoutMinutes: Number(event.target.value) as MinWorkoutMinutes,
+                    })
+                  }
+                >
+                  {MIN_WORKOUT_OPTIONS.map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {minutes} min
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {timingError ? (
+              <p className="field-error" role="alert">
+                {timingError}
+              </p>
+            ) : (
+              <p className="field-note">
+                The workout has to fit inside the outing after the journey there and back. A longer
+                window does not create a free slot.
+              </p>
+            )}
           </fieldset>
 
           <fieldset>
@@ -175,10 +206,14 @@ export function HeroSearch({
         <button
           className="primary-button"
           type="submit"
-          disabled={!locationReady}
+          disabled={locating || timingError !== null}
           aria-describedby="location-status"
         >
-          Find my best match
+          {locating
+            ? "Finding your location…"
+            : locationReady
+              ? "Find my best match"
+              : "Use my location to search"}
         </button>
       </form>
     </section>

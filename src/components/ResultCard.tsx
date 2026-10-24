@@ -3,6 +3,7 @@ import type { MapOrigin, ScoredMatch } from "../domain/types.ts"
 import { ACTIVITY_LABELS, FACILITY_KIND_LABELS, TRANSPORT_LABELS } from "../data/sources.ts"
 import { googleMapsDirectionsUrl } from "../lib/directions.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
+import { DemoSchedule } from "./DemoSchedule.tsx"
 import { URLS } from "../data/sources.ts"
 
 type ResultCardProps = {
@@ -13,7 +14,12 @@ type ResultCardProps = {
 }
 
 export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: ResultCardProps) {
-  const { facility, activity, slot, travel, timeFit, score, reasons, isBest } = result
+  const { facility, activity, slot, windowSlots, travel, timeFit, score, reasons, isBest } = result
+  const isExample = slot?.provenance.status === "demonstration"
+  const confirmedMatch = isBest && slot !== null && !isExample
+  const outingMinutes = timeFit.sessionKnown
+    ? timeFit.outboundMinutes + timeFit.exerciseMinutes + timeFit.returnMinutes
+    : null
   const directionsUrl = googleMapsDirectionsUrl(
     facility,
     travel.mode,
@@ -23,7 +29,7 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
   )
   const cardClass = [
     "result-card",
-    isBest ? "result-card--best" : "",
+    confirmedMatch ? "result-card--best" : "",
     selected ? "result-card--selected" : "",
   ]
     .filter(Boolean)
@@ -32,8 +38,10 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
   return (
     <article id={`result-${facility.id}`} className={cardClass}>
       <div className="card-topline">
-        {isBest ? <p className="badge badge--best">Best match</p> : <p className="badge">Also fits</p>}
-        <p className={slot ? "badge badge--data" : "badge badge--schedule"}>{facility.schedule.label}</p>
+        {confirmedMatch ? <p className="badge badge--best">Fits your window</p> : null}
+        <p className={isExample ? "badge badge--data" : "badge badge--schedule"}>
+          {isExample ? "Example only" : facility.schedule.label}
+        </p>
       </div>
       <h3>{facility.name}</h3>
       <p className="local-name">{facility.localName}</p>
@@ -48,27 +56,38 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
 
       <dl className="stats">
         <div>
-          <dt>Travel time</dt>
-          <dd>{timeFit.outboundMinutes} min each way</dd>
+          <dt>Travel</dt>
+          <dd>
+            {timeFit.outboundMinutes} min out, {timeFit.returnMinutes} min back
+          </dd>
           <dd className="stat-note">Demonstration estimate · {TRANSPORT_LABELS[travel.mode]}</dd>
         </div>
         <div>
-          <dt>{timeFit.sessionKnown ? "Exercise time" : "Session length"}</dt>
+          <dt>Suggested workout</dt>
           <dd>{timeFit.sessionKnown ? `${timeFit.exerciseMinutes} min` : "Not confirmed"}</dd>
           <dd className="stat-note">
             {timeFit.sessionKnown
-              ? "After the outbound and return journeys"
-              : `About ${timeFit.remainingMinutes} minutes remain after the estimated journey.`}
+              ? "Capped by the example length and the outing limit"
+              : "No session length is loaded"}
           </dd>
         </div>
         <div>
-          <dt>{slot ? "Illustrative availability" : "Schedule"}</dt>
-          <dd>{slot ? slot.exampleWindow : facility.schedule.label}</dd>
+          <dt>Total outing</dt>
+          <dd>{outingMinutes === null ? "Not confirmed" : `${outingMinutes} min`}</dd>
+          <dd className="stat-note">Workout plus travel both ways</dd>
+        </div>
+        <div>
+          <dt>Slot</dt>
+          <dd>{isExample ? "Demo slot — illustrative only" : facility.schedule.label}</dd>
           <dd className="stat-note">
-            {slot ? `${slot.durationMinutes} min example slot` : "Not a live open status"}
+            {isExample
+              ? `${slot?.exampleWindow}. ${slot?.durationMinutes} min demo, not a booked interval.`
+              : "Not a live open status"}
           </dd>
         </div>
       </dl>
+
+      <DemoSchedule slots={windowSlots} selectedId={slot?.id ?? null} />
 
       <div className="reasons">
         <h4>Why this rank</h4>

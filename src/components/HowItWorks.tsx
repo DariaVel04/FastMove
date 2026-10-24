@@ -4,11 +4,11 @@ import { ExternalLink } from "./ExternalLink.tsx"
 const steps = [
   {
     title: "Choose your activity",
-    text: "Pick an activity, the minutes you have and how you will travel. Press Use my location so the journey starts from where you are. Car, walking, cycling and public transport each use their own demonstration estimate.",
+    text: "Pick a sport, the hours you are free, the longest outing you can spare and the shortest workout you want. Press Use my location so the journey starts from where you are. Travel times are demonstration estimates.",
   },
   {
     title: "Find your match",
-    text: "FastMove keeps facilities that support the activity and still leave time to exercise after the journey there and back. The best match is the highest ranking index.",
+    text: "A confirmed slot has to sit inside your window, cover the minimum workout, and fit the outing after travel both ways. Example times stay labelled as examples.",
   },
   {
     title: "Verify in Timmi",
