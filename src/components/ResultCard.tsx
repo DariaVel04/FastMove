@@ -4,6 +4,8 @@ import type { MapOrigin, ScoredMatch } from "../domain/types.ts"
 import { URLS } from "../data/sources.ts"
 import {
   facilityTitle,
+  formatLocalizedClock,
+  formatLocalizedDemoDate,
   kindLabel,
   localizedDistance,
   localizedReasons,
@@ -12,7 +14,7 @@ import {
   transportLabel,
 } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
-import { googleMapsDirectionsUrl, nysseJourneyUrl } from "../lib/directions.ts"
+import { cardNysseUrl, googleMapsDirectionsUrl } from "../lib/directions.ts"
 import { ticketCoverageLabel } from "../lib/present.ts"
 import { cardStatus } from "../lib/status.ts"
 import { DemoSchedule } from "./DemoSchedule.tsx"
@@ -24,23 +26,52 @@ type ResultCardProps = {
   selected: boolean
   directionsOrigin: MapOrigin | null
   onShowOnMap: (facilityId: string) => void
+  /** "reachable": the hall overlaps the window but the trip does not fit the outing limit. */
+  variant?: "match" | "reachable"
+  maxOutingMinutes?: number
 }
 
-export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: ResultCardProps) {
-  const { facility, activity, slot, windowSlots, travel, timeFit, score } = result
+export function ResultCard({
+  result,
+  selected,
+  directionsOrigin,
+  onShowOnMap,
+  variant = "match",
+  maxOutingMinutes,
+}: ResultCardProps) {
+  const { facility, activity, slot, windowSlots, travel, timeFit, score, chosenInterval } = result
   const { language, t, text } = useI18n()
   const isExample = slot?.provenance.status === "demonstration"
+  const onTicket = facility.programme.sourceUrl === URLS.ticket
   const summary = localizedSummary(result, language)
   const origin = directionsOrigin
     ? { latitude: directionsOrigin.latitude, longitude: directionsOrigin.longitude }
     : null
   const directionsUrl = googleMapsDirectionsUrl(facility, travel.mode, origin)
-  const nysseUrl = travel.mode === "public-transport" ? nysseJourneyUrl(facility, origin) : null
+  const nysseUrl = cardNysseUrl(facility, travel.mode, origin)
   const distance = localizedDistance(travel.straightLineKm, language)
-  const travelLine =
+  const tripMinutes =
     timeFit.outboundMinutes === timeFit.returnMinutes
-      ? t("card.travelSame", { minutes: timeFit.outboundMinutes })
-      : t("card.travelSplit", { out: timeFit.outboundMinutes, back: timeFit.returnMinutes })
+      ? t("card.tripSame", { minutes: timeFit.outboundMinutes })
+      : t("card.tripSplit", { out: timeFit.outboundMinutes, back: timeFit.returnMinutes })
+  const tripLine = [
+    transportLabel(language, travel.mode),
+    tripMinutes,
+    distance,
+    directionsOrigin
+      ? t("card.fromStart", {
+          name: directionsOrigin.id.startsWith("device-") ? t("origin.name") : text(directionsOrigin.name),
+        })
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  const demoStart = slot ? windowSlots.find((demo) => demo.id === slot.id)?.startTime : undefined
+  const clock = (minutes: number) => formatLocalizedClock(minutes, language)
+  const partial =
+    chosenInterval !== null &&
+    (chosenInterval.usableStartMinutes !== chosenInterval.demoStartMinutes ||
+      chosenInterval.usableEndMinutes !== chosenInterval.demoEndMinutes)
   const cardClass = ["result-card", selected ? "result-card--selected" : ""].filter(Boolean).join(" ")
 
   function focusMap(event: MouseEvent<HTMLElement>) {
@@ -53,7 +84,7 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
   return (
     <article id={`result-${facility.id}`} className={cardClass} onClick={focusMap}>
       <div className="card-topline">
-        <StatusBadge status={cardStatus(result)} />
+        <StatusBadge status={variant === "reachable" ? "long-trip" : cardStatus(result)} />
         {isExample ? <p className="badge badge--data">{t("card.demo")}</p> : null}
       </div>
       <h3>
@@ -61,54 +92,84 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
           {facilityTitle(facility.name, facility.localName, language)}
         </button>
       </h3>
-      <p className="ticket-status">{text(ticketCoverageLabel(facility.programme.sourceUrl))}</p>
-      <ul className="scan-list">
-        <li>{distance ?? t("card.distanceUnknown")}</li>
-        <li>
-          {transportLabel(language, travel.mode)} · {travelLine}
-        </li>
-        <li>
-          {timeFit.sessionKnown
-            ? t("card.workout", { minutes: timeFit.exerciseMinutes })
-            : t("card.workoutUnknown")}
-        </li>
-      </ul>
-      {isExample ? <p className="field-note">{t("card.demoNote")}</p> : null}
-      {travel.mode === "public-transport" ? <p className="field-note">{t("card.nysseLimit")}</p> : null}
-      {activity.dropInLimited ? <p className="field-note">{text(activity.detail)}</p> : null}
-      {facility.coordinateSource.note.includes("Hall A has a separate point") ? (
-        <p className="field-note">{t("card.hallB")}</p>
-      ) : null}
-      {facility.schedule.state === "seasonal-check" ? (
-        <p className="field-note">{text(facility.schedule.detail)}</p>
-      ) : null}
-      {!directionsUrl ? <p className="field-note">{t("card.noDirections")}</p> : null}
+      <p className="card-room">
+        {text(activity.spaceName)} · {text(ticketCoverageLabel(facility.programme.sourceUrl))}
+      </p>
+      <div className="card-face">
+        {chosenInterval && slot ? (
+          <p className="card-hours">
+            {isExample ? <span className="example-tag">{t("card.example")}</span> : null}
+            <span>
+              {t("card.hours", {
+                date: demoStart ? formatLocalizedDemoDate(demoStart, language) : "",
+                start: clock(chosenInterval.usableStartMinutes),
+                end: clock(chosenInterval.usableEndMinutes),
+              })}
+            </span>
+            <span>{t("card.inHall", { minutes: timeFit.exerciseMinutes })}</span>
+          </p>
+        ) : (
+          <p className="card-hours">{t("card.workoutUnknown")}</p>
+        )}
+        {chosenInterval && partial ? (
+          <p className="card-interval">
+            {t("card.exampleInterval", {
+              start: clock(chosenInterval.demoStartMinutes),
+              end: clock(chosenInterval.demoEndMinutes),
+            })}
+          </p>
+        ) : null}
+        <p className="card-trip">{distance ? tripLine : `${tripLine} · ${t("card.distanceUnknown")}`}</p>
+        {variant === "reachable" ? (
+          <p className="card-reach">
+            {t("card.reach", { minutes: timeFit.outboundMinutes, max: maxOutingMinutes ?? 0 })}
+          </p>
+        ) : null}
+      </div>
 
-      <div className="card-actions">
+      <div className="card-primary-actions">
+        {directionsUrl ? (
+          <a className="directions-button" href={directionsUrl} target="_blank" rel="noreferrer">
+            {t("link.directions")}
+            <span className="visually-hidden"> {t("link.newTab")}</span>
+          </a>
+        ) : null}
         {activity.timmiUrl ? (
           <ExternalLink className="secondary-button" href={activity.timmiUrl}>
             {t("link.timmiRoom")}
           </ExternalLink>
-        ) : facility.schedule.state === "demonstration-examples" ? (
+        ) : facility.schedule.state === "demonstration-examples" || onTicket ? (
           <ExternalLink className="secondary-button" href={URLS.timmiApp}>
             {t("link.timmi")}
           </ExternalLink>
         ) : (
           <p className="field-note card-schedule-note">{t("card.sessionCity")}</p>
         )}
-        <button type="button" className="secondary-button" onClick={() => onShowOnMap(facility.id)}>
+      </div>
+      {onTicket ? <p className="card-rule">{t("card.ticketRule")}</p> : null}
+
+      {activity.dropInLimited ? <p className="field-note">{text(activity.detail)}</p> : null}
+      {facility.schedule.state === "seasonal-check" ? (
+        <p className="field-note">{text(facility.schedule.detail)}</p>
+      ) : null}
+      {!directionsUrl ? <p className="field-note">{t("card.noDirections")}</p> : null}
+
+      <div className="card-links">
+        <button type="button" className="link-button" onClick={() => onShowOnMap(facility.id)}>
           <MapPin aria-hidden="true" size={16} />
           {t("link.showMap")}
         </button>
         {nysseUrl ? (
-          <ExternalLink className="secondary-button" href={nysseUrl}>
+          <ExternalLink className="link-button" href={nysseUrl}>
             {t("link.nysse")}
           </ExternalLink>
         ) : null}
       </div>
+      {travel.mode === "public-transport" ? <p className="field-note">{t("card.nysseLimit")}</p> : null}
 
       <details className="score-details">
         <summary>{t("card.whyMatch")}</summary>
+        {isExample ? <p className="field-note">{t("card.demoNote")}</p> : null}
         <p className="local-name">{language === "fi" ? facility.name : facility.localName}</p>
         <p className="location">
           {kindLabel(language, facility.kind)} · {facility.area} · {facility.address}
@@ -119,12 +180,6 @@ export function ResultCard({ result, selected, directionsOrigin, onShowOnMap }: 
           ))}
         </ul>
         <div className="detail-actions">
-          {directionsUrl ? (
-            <a className="directions-button" href={directionsUrl} target="_blank" rel="noreferrer">
-              {t("link.directions")}
-              <span className="visually-hidden"> {t("link.newTab")}</span>
-            </a>
-          ) : null}
           <ExternalLink className="secondary-button" href={facility.infoUrl}>
             {t("link.city")}
           </ExternalLink>

@@ -100,6 +100,12 @@ export const fiPhrases: Record<string, string> = {
     "Lippu kattaa palloilusalin kentät 1–3. Se ei nimeä lajia eikä linkitä Timmi-tilaa, eikä lajia vahvistavaa kaupungin sivua löytynyt, joten niitä ei yhdistetä.",
   "LIPAS point for B-hall (lipas-id 88985). Hall A has a separate point. The LIPAS event-date on this record is 8 September 2017. This does not confirm ticket eligibility or a surveyed entrance.":
     "LIPAS-piste B-hallille (lipas-id 88985). Hallilla A on erillinen piste. Tämän tietueen LIPAS-tapahtumapäivä on 8.9.2017. Tämä ei vahvista lipun kelpoisuutta eikä mitattua sisäänkäyntiä.",
+  "LIPAS point for B-hall (lipas-id 88985). The LIPAS event-date on this record is 8 September 2017. This does not confirm ticket eligibility or a surveyed entrance.":
+    "LIPAS-piste B-hallille (lipas-id 88985). Tämän tietueen LIPAS-tapahtumapäivä on 8.9.2017. Tämä ei vahvista lipun kelpoisuutta eikä mitattua sisäänkäyntiä.",
+  "LIPAS point for A-hall (lipas-id 89037). Hall B has its own point. The LIPAS event-date on this record is 15 September 2017. This does not confirm ticket eligibility or a surveyed entrance.":
+    "LIPAS-piste A-hallille (lipas-id 89037). Hallilla B on oma pisteensä. Tämän tietueen LIPAS-tapahtumapäivä on 15.9.2017. Tämä ei vahvista lipun kelpoisuutta eikä mitattua sisäänkäyntiä.",
+  "The city page says hall A is a football and athletics training hall. The ticket covers hall A during the sports season. Hall B is described as an athletics hall, so it is not matched for football. The ticket page does not link a Timmi room.":
+    "Kaupungin sivu kertoo, että hall A on jalkapallon ja yleisurheilun harjoitushalli. Lippu kattaa hallin A liikuntakauden aikana. Hall B kuvataan yleisurheiluhalliksi, joten sitä ei yhdistetä jalkapalloon. Lippusivu ei linkitä Timmi-tilaa.",
   "Hall B is on the ticket and is described as an athletics practice hall. Futsal and floorball courts are in D-hall, and another football field is in C-hall. C and D are not on the ticket list.":
     "Hall B on lipulla, ja sitä kuvataan yleisurheilun harjoitushalliksi. Futsal- ja salibandykentät ovat D-hallissa, ja toinen jalkapallokenttä on C-hallissa. C ja D eivät ole lipun listalla.",
   "Hall A": "Hall A",

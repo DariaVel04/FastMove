@@ -124,15 +124,18 @@ export function findMatches(
       results: [],
       confirmed: [],
       timeExclusions: [],
+      reachable: [],
       scheduleNotes: [],
       visitCautions: [],
       activitySupportedCount: 0,
     }
   }
 
+  const capOuting = query.applyOutingCap !== false
   const results: ScoredMatch[] = []
   const visitCautions: ScoredMatch[] = []
   const timeExclusions: TimeExclusion[] = []
+  const reachable: ScoredMatch[] = []
   const scheduleNotes: ScheduleNote[] = []
   let activitySupportedCount = 0
   const now = new Date()
@@ -229,6 +232,14 @@ export function findMatches(
     const fitting = evaluated.filter((item) => item.assessment.fits && item.assessment.workoutMinutes !== null)
 
     if (fitting.length === 0) {
+      const reach =
+        !capOuting && !activity.dropInLimited
+          ? reachableInWindow(facility, activity, windowSlots, travel, query, windowStart, windowEnd, todayKey)
+          : null
+      if (reach) {
+        reachable.push(reach)
+        continue
+      }
       timeExclusions.push({
         facilityId: facility.id,
         facilityName: facility.name,
@@ -289,7 +300,96 @@ export function findMatches(
   }
 
   results.sort(compareRelevance)
-  return { results, confirmed: [], timeExclusions, scheduleNotes, visitCautions, activitySupportedCount }
+  reachable.sort(compareRelevance)
+  return { results, confirmed: [], timeExclusions, reachable, scheduleNotes, visitCautions, activitySupportedCount }
+}
+
+/**
+ * With the outing cap off, keep a hall whose example interval can be reached and
+ * left inside the free window. The outing limit is the only thing that failed,
+ * so the result says nothing about how busy the hall is.
+ */
+function reachableInWindow(
+  facility: Facility,
+  activity: SupportedActivity,
+  windowSlots: DemoSlot[],
+  travel: ReturnType<typeof estimateTravel>,
+  query: SearchQuery,
+  windowStart: number,
+  windowEnd: number,
+  todayKey: string,
+): ScoredMatch | null {
+  const assess = (demo: DemoSlot, minWorkoutMinutes: number) =>
+    assessSlotAttendance(
+      {
+        startMinutes: clockMinutes(demo.startTime),
+        endMinutes: clockMinutes(demo.endTime),
+        kind: "demo-interval",
+        activityId: demo.sport,
+        fixedSession: false,
+      },
+      {
+        windowStart,
+        windowEnd,
+        maxOutingMinutes: windowEnd - windowStart,
+        minWorkoutMinutes,
+        outboundMinutes: travel.outboundMinutes,
+        returnMinutes: travel.returnMinutes,
+        selectedActivityId: query.activityId,
+      },
+    )
+  const available = windowSlots.filter((slot) => slot.status === "demo_available")
+  const pick = (minWorkoutMinutes: number) =>
+    chooseNearestFittingDemo(
+      available
+        .map((demo) => ({ demo, assessment: assess(demo, minWorkoutMinutes) }))
+        .filter((entry) => entry.assessment.fits && entry.assessment.workoutMinutes !== null)
+        .map((entry) => ({
+          ...entry,
+          startTime: entry.demo.startTime,
+          durationMinutes: entry.demo.durationMinutes,
+          workoutMinutes: entry.assessment.workoutMinutes ?? 0,
+        })),
+      todayKey,
+    )
+  const chosen = pick(query.minWorkoutMinutes) ?? pick(1)
+  if (!chosen) return null
+
+  const fit: TimeFit = {
+    outboundMinutes: travel.outboundMinutes,
+    returnMinutes: travel.returnMinutes,
+    roundTripMinutes: travel.roundTripMinutes,
+    remainingMinutes: query.maxOutingMinutes - travel.roundTripMinutes,
+    exerciseMinutes: chosen.assessment.workoutMinutes ?? 0,
+    sessionKnown: true,
+    fits: false,
+  }
+  const slot = demoToAvailability(chosen.demo)
+  return {
+    facility,
+    activity,
+    slot,
+    chosenInterval: {
+      demoStartMinutes: clockMinutes(chosen.demo.startTime),
+      demoEndMinutes: clockMinutes(chosen.demo.endTime),
+      usableStartMinutes: chosen.assessment.workoutStart ?? clockMinutes(chosen.demo.startTime),
+      usableEndMinutes: chosen.assessment.workoutEnd ?? clockMinutes(chosen.demo.endTime),
+    },
+    windowSlots,
+    travel,
+    timeFit: fit,
+    score: scoreMatch({
+      roundTripMinutes: fit.roundTripMinutes,
+      exerciseMinutes: fit.exerciseMinutes,
+      dataConfidence: DEMONSTRATION_CONFIDENCE,
+    }),
+    reasons: [
+      activity.detail,
+      `${TRANSPORT_LABELS[query.transport]} estimate: ${fit.outboundMinutes} minutes each way. About ${fit.exerciseMinutes} minutes left to exercise.`,
+      "This availability is a fictional demo slot and has not been checked in Timmi. The labelled window is not a confirmed start and end.",
+    ],
+    isBest: false,
+  }
 }
 
 export function compareRelevance(left: ScoredMatch, right: ScoredMatch): number {

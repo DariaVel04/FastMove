@@ -1,21 +1,16 @@
-import { useEffect, useRef } from "react"
-import { CircleMarker as LeafletCircleMarker } from "leaflet"
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from "react-leaflet"
+import { useEffect, useRef, useState } from "react"
+import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet"
 import type { Facility, MapOrigin, ScoredMatch, TransportMode } from "../domain/types.ts"
 import { facilities } from "../data/facilities.ts"
-import { clockMinutes } from "../data/demoSchedule.ts"
-import { URLS } from "../data/sources.ts"
-import { facilityTitle, formatLocalizedClock, formatLocalizedDemoDate } from "../i18n/display.ts"
+import { facilityTitle } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
-import type { Language } from "../i18n/types.ts"
-import type { MessageKey } from "../i18n/translations.ts"
-import { googleMapsDirectionsUrl, nysseJourneyUrl } from "../lib/directions.ts"
+import { cardNysseUrl } from "../lib/directions.ts"
+import { fetchRoute, routeUrl, type RouteLine } from "../lib/route.ts"
 import { ExternalLink } from "./ExternalLink.tsx"
 
 type FacilityMapProps = {
   start: MapOrigin | null
   results: ScoredMatch[]
-  linked: ScoredMatch[]
   transport: TransportMode
   focusTick: number
   selectedFacilityId: string | null
@@ -25,13 +20,52 @@ type FacilityMapProps = {
 
 type MapCanvasProps = FacilityMapProps & {
   refitKey: string
+  routeLine: RouteLine | null
+  labelledId: string | null
+}
+
+type RouteState = { key: string; line: RouteLine | null }
+
+function useRouteLine(start: MapOrigin | null, target: Facility | null, transport: TransportMode) {
+  const key =
+    start && target ? `${transport}:${start.latitude},${start.longitude}:${target.id}` : ""
+  const url =
+    start && target && target.coordinateSource.provider === "LIPAS" ? routeUrl(transport, start, target) : null
+  const [state, setState] = useState<RouteState>({ key: "", line: null })
+
+  useEffect(() => {
+    if (!url) return
+    const controller = new AbortController()
+    fetchRoute(url, controller.signal)
+      .then((line) => setState({ key, line }))
+      .catch(() => {
+        if (!controller.signal.aborted) setState({ key, line: null })
+      })
+    return () => controller.abort()
+  }, [key, url])
+
+  if (!key) return { status: "none" as const, line: null }
+  if (transport === "public-transport") return { status: "transit" as const, line: null }
+  if (!url) return { status: "failed" as const, line: null }
+  if (state.key !== key) return { status: "loading" as const, line: null }
+  return state.line ? { status: "ok" as const, line: state.line } : { status: "failed" as const, line: null }
 }
 
 export function FacilityMap(props: FacilityMapProps) {
-  const { t } = useI18n()
+  const { language, t } = useI18n()
   const refitKey = `${props.hasSearched ? "searched" : "browse"}:${props.start?.id ?? "none"}:${props.results
     .map((result) => result.facility.id)
     .join(",")}`
+  const target = props.hasSearched
+    ? (facilities.find((facility) => facility.id === props.selectedFacilityId) ??
+      props.results[0]?.facility ??
+      null)
+    : null
+  const route = useRouteLine(props.hasSearched ? props.start : null, target, props.transport)
+  const transitUrl =
+    route.status === "transit" && target && props.start
+      ? cardNysseUrl(target, "public-transport", props.start)
+      : null
 
   return (
     <section className="map-section" aria-labelledby="map-title">
@@ -40,8 +74,28 @@ export function FacilityMap(props: FacilityMapProps) {
         <p>{t("map.intro")}</p>
       </div>
       <div className="map-frame">
-        <MapCanvas {...props} refitKey={refitKey} />
+        <MapCanvas {...props} refitKey={refitKey} routeLine={route.line} labelledId={target?.id ?? null} />
       </div>
+      {route.status !== "none" && target ? (
+        <p className="route-status" role="status">
+          <strong>{facilityTitle(target.name, target.localName, language)}</strong>{" "}
+          {route.status === "loading"
+            ? t("map.routeLoading")
+            : route.status === "transit"
+              ? t("map.routeTransit")
+              : route.status === "failed"
+                ? t("map.routeFailed")
+                : route.line?.durationMinutes
+                  ? t("map.routeOk", { minutes: route.line.durationMinutes })
+                  : t("map.routeNoDuration")}
+          {transitUrl ? (
+            <>
+              {" "}
+              <ExternalLink href={transitUrl}>{t("link.nysse")}</ExternalLink>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       <ul className="legend">
         {props.start ? (
           <li>
@@ -66,14 +120,15 @@ export function FacilityMap(props: FacilityMapProps) {
 function MapCanvas({
   start,
   results,
-  linked,
-  transport,
   focusTick,
   selectedFacilityId,
   hasSearched,
   onSelect,
   refitKey,
+  routeLine,
+  labelledId,
 }: MapCanvasProps) {
+  const { language, t, text } = useI18n()
   return (
     <MapContainer
       center={start ? [start.latitude, start.longitude] : [facilities[0].latitude, facilities[0].longitude]}
@@ -93,29 +148,33 @@ function MapCanvas({
         selectedFacilityId={selectedFacilityId}
         focusTick={focusTick}
       />
+      {routeLine ? (
+        <>
+          <Polyline positions={routeLine.path} pathOptions={{ color: "#14382c", weight: 8, opacity: 0.9 }} />
+          <Polyline positions={routeLine.path} pathOptions={{ color: "#d8f25a", weight: 4, opacity: 1 }} />
+        </>
+      ) : null}
       {start ? (
         <CircleMarker
           center={[start.latitude, start.longitude]}
           radius={8}
           pathOptions={{ color: "#f4efe6", weight: 3, fillColor: "#14382c", fillOpacity: 1 }}
         >
-          <Popup>
-            <StartPopup start={start} />
-          </Popup>
+          <Tooltip direction="top" offset={[0, -8]} className="map-label">
+            {start.id.startsWith("device-") ? t("origin.name") : text(start.name)}
+          </Tooltip>
         </CircleMarker>
       ) : null}
       {facilities.map((facility) => {
         const match = results.find((result) => result.facility.id === facility.id)
-        const linkedMatch = linked.find((result) => result.facility.id === facility.id) ?? match
         return (
           <FacilityMarker
             key={facility.id}
+            name={facilityTitle(facility.name, facility.localName, language)}
             facility={facility}
             match={match}
-            linkedMatch={linkedMatch}
-            start={start}
-            transport={transport}
             selected={selectedFacilityId === facility.id}
+            labelled={labelledId === facility.id}
             onSelect={onSelect}
           />
         )
@@ -124,85 +183,21 @@ function MapCanvas({
   )
 }
 
-function StartPopup({ start }: { start: MapOrigin }) {
-  const { t, text } = useI18n()
-  const device = start.id.startsWith("device-")
-  return (
-    <>
-      <strong>{device ? t("origin.name") : text(start.name)}</strong>
-      <br />
-      {device ? t("origin.detail") : start.detail}
-      <br />
-      {device ? t("origin.note") : text(start.sourceNote)}
-    </>
-  )
-}
-
-function describeMarker(
-  facility: Facility,
-  match: ScoredMatch | undefined,
-  t: (key: MessageKey, vars?: Record<string, string | number>) => string,
-  text: (english: string) => string,
-): string {
-  if (match) {
-    const space = text(match.activity.spaceName)
-    if (!match.timeFit.sessionKnown) {
-      return t("map.unknownSession", {
-        space,
-        minutes: match.timeFit.outboundMinutes,
-        schedule: text(match.facility.schedule.label),
-      })
-    }
-    return t("map.knownSession", {
-      space,
-      minutes: match.timeFit.outboundMinutes,
-      exercise: match.timeFit.exerciseMinutes,
-    })
-  }
-  const spaces = facility.activities.map((activity) => text(activity.spaceName)).join(", ")
-  const parts = [
-    spaces ? t("map.supported", { spaces }) : "",
-    facility.otherDocumentedUses ? text(facility.otherDocumentedUses) : "",
-  ].filter(Boolean)
-  return parts.join(" ") || text(facility.schedule.label)
-}
-
-function markerWhen(match: ScoredMatch | undefined, language: Language): string | null {
-  if (!match?.slot?.exampleWindow) return null
-  if (language === "en") return match.slot.exampleWindow
-  const demo = match.windowSlots.find((slot) => slot.id === match.slot?.id)
-  if (!demo) return match.slot.exampleWindow
-  const start = formatLocalizedClock(clockMinutes(demo.startTime), language)
-  const end = formatLocalizedClock(clockMinutes(demo.endTime), language)
-  return `${formatLocalizedDemoDate(demo.startTime, language)} · ${start}–${end}`
-}
-
 function FacilityMarker({
+  name,
   facility,
   match,
-  linkedMatch,
-  start,
-  transport,
   selected,
+  labelled,
   onSelect,
 }: {
+  name: string
   facility: Facility
   match: ScoredMatch | undefined
-  linkedMatch: ScoredMatch | undefined
-  start: MapOrigin | null
-  transport: TransportMode
   selected: boolean
+  labelled: boolean
   onSelect: (facilityId: string) => void
 }) {
-  const { language, t, text } = useI18n()
-  const popupMatch = linkedMatch ?? match
-  const when = markerWhen(popupMatch, language)
-  const origin = start ? { latitude: start.latitude, longitude: start.longitude } : null
-  const mode = popupMatch?.travel.mode ?? transport
-  const directionsUrl = googleMapsDirectionsUrl(facility, mode, origin)
-  const nysseUrl = mode === "public-transport" ? nysseJourneyUrl(facility, origin) : null
-  const timmiUrl = popupMatch?.activity.timmiUrl ?? URLS.timmiApp
-  const room = popupMatch ? text(popupMatch.activity.spaceName) : null
   const demoMatch = match?.slot?.provenance.status === "demonstration"
   const isDemoHighlight = demoMatch === true && match?.isBest === true
   const fillColor = isDemoHighlight ? "#d8f25a" : demoMatch ? "#1e5340" : "#c8bfb2"
@@ -215,47 +210,15 @@ function FacilityMarker({
       pathOptions={{ color: selected ? "#d8f25a" : "#14382c", weight: selected ? 4 : 2, fillColor, fillOpacity: 1 }}
       eventHandlers={{ click: () => onSelect(facility.id) }}
     >
-      <Popup maxWidth={220} autoPan keepInView autoPanPadding={[12, 12]}>
-        <strong>{facilityTitle(facility.name, facility.localName, language)}</strong>
-        <br />
-        {facility.address}
-        <br />
-        {room ? (
-          <>
-            {t("map.room", { room })}
-            <br />
-          </>
-        ) : null}
-        {when ? (
-          <>
-            {t("map.demoInterval", { when })}
-            <br />
-            {t("card.demo")}
-            <br />
-          </>
-        ) : null}
-        {t("map.notLive")}
-        <br />
-        {text(facility.coordinateSource.note)}
-        <br />
-        {describeMarker(facility, popupMatch, t, text)}
-        <br />
-        <ExternalLink href={timmiUrl}>
-          {popupMatch?.activity.timmiUrl ? t("link.timmiRoom") : t("link.timmi")}
-        </ExternalLink>
-        {directionsUrl ? (
-          <>
-            <br />
-            <ExternalLink href={directionsUrl}>{t("link.directions")}</ExternalLink>
-          </>
-        ) : null}
-        {nysseUrl ? (
-          <>
-            <br />
-            <ExternalLink href={nysseUrl}>{t("link.nysse")}</ExternalLink>
-          </>
-        ) : null}
-      </Popup>
+      <Tooltip
+        key={labelled ? "pinned" : "hover"}
+        direction="top"
+        offset={[0, -radius]}
+        permanent={labelled}
+        className="map-label"
+      >
+        {name}
+      </Tooltip>
     </CircleMarker>
   )
 }
@@ -280,24 +243,13 @@ function MapController({
   const previousKey = useRef("")
 
   useEffect(() => {
-    const labelControls = () => {
-      const root = map.getContainer()
-      const zoomIn = root.querySelector(".leaflet-control-zoom-in")
-      const zoomOut = root.querySelector(".leaflet-control-zoom-out")
-      zoomIn?.setAttribute("title", t("map.zoomIn"))
-      zoomIn?.setAttribute("aria-label", t("map.zoomIn"))
-      zoomOut?.setAttribute("title", t("map.zoomOut"))
-      zoomOut?.setAttribute("aria-label", t("map.zoomOut"))
-      root.querySelectorAll(".leaflet-popup-close-button").forEach((button) => {
-        button.setAttribute("title", t("map.closePopup"))
-        button.setAttribute("aria-label", t("map.closePopup"))
-      })
-    }
-    labelControls()
-    map.on("popupopen", labelControls)
-    return () => {
-      map.off("popupopen", labelControls)
-    }
+    const root = map.getContainer()
+    const zoomIn = root.querySelector(".leaflet-control-zoom-in")
+    const zoomOut = root.querySelector(".leaflet-control-zoom-out")
+    zoomIn?.setAttribute("title", t("map.zoomIn"))
+    zoomIn?.setAttribute("aria-label", t("map.zoomIn"))
+    zoomOut?.setAttribute("title", t("map.zoomOut"))
+    zoomOut?.setAttribute("aria-label", t("map.zoomOut"))
   }, [map, t])
 
   useEffect(() => {
@@ -314,13 +266,6 @@ function MapController({
     const facility = facilities.find((item) => item.id === selectedFacilityId)
     if (!facility) return
     map.flyTo([facility.latitude, facility.longitude], Math.max(map.getZoom(), 15), { animate: false })
-    map.eachLayer((layer) => {
-      if (!(layer instanceof LeafletCircleMarker)) return
-      const at = layer.getLatLng()
-      const same =
-        Math.abs(at.lat - facility.latitude) < 0.00001 && Math.abs(at.lng - facility.longitude) < 0.00001
-      if (same) layer.openPopup()
-    })
   }, [focusTick, map, selectedFacilityId])
 
   return null

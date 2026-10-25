@@ -55,14 +55,17 @@ export const ACTIVITY_LABELS = {
   "other-indoor": "Other Indoor Sports",
 } as const
 
-/** Display order for the sport control. Football and futsal stay separate because the city pages do. */
+/**
+ * Display order for the sport control. The first groups hold only sports that a
+ * ticket room supports. Football and futsal stay separate because the city pages do.
+ */
 export const ACTIVITY_GROUPS = [
   { label: "Fitness", ids: ["gym", "functional-training"] },
-  { label: "Racket Sports", ids: ["badminton", "tennis", "table-tennis"] },
+  { label: "Racket Sports", ids: ["table-tennis"] },
   { label: "Ball Sports", ids: ["basketball", "volleyball", "football", "futsal", "floorball"] },
-  { label: "Water Sports", ids: ["swimming"] },
-  { label: "Ice Sports", ids: ["figure-skating", "ice-hockey", "outdoor-ice"] },
-  { label: "Other", ids: ["gymnastics", "martial-arts", "other-indoor"] },
+  { label: "Other", ids: ["gymnastics", "martial-arts"] },
+  { label: "Not named on the ticket page", ids: ["badminton", "tennis", "other-indoor"] },
+  { label: "Not the Liikkuva Tampere ticket", ids: ["swimming", "figure-skating", "ice-hockey", "outdoor-ice"] },
 ] as const satisfies readonly { label: string; ids: readonly ActivityId[] }[]
 
 export const FACILITY_KIND_LABELS = {

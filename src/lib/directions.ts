@@ -1,4 +1,5 @@
 import type { Facility, TransportMode } from "../domain/types.ts"
+import { URLS } from "../data/sources.ts"
 
 const GOOGLE_DIRECTIONS = "https://www.google.com/maps/dir/"
 
@@ -68,4 +69,11 @@ export function nysseJourneyUrl(facility: Facility, origin: Origin | null): stri
   const from = `::${origin.latitude},${origin.longitude}`
   const to = `::${facility.latitude},${facility.longitude}`
   return `https://reittiopas.tampere.fi/${encodeURIComponent(from)}/${encodeURIComponent(to)}`
+}
+
+/** Ticket rooms offer the Nysse planner for every transport mode. Other places only for public transport. */
+export function cardNysseUrl(facility: Facility, transport: TransportMode, origin: Origin | null): string | null {
+  const onTicket = facility.programme.sourceUrl === URLS.ticket
+  if (!onTicket && transport !== "public-transport") return null
+  return nysseJourneyUrl(facility, origin)
 }

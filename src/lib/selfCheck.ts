@@ -1,10 +1,11 @@
 import { ACTIVITY_IDS, AVAILABLE_MINUTES, TRANSPORT_MODES } from "../domain/types.ts"
 import type { ActivityId, AvailableMinutes, TransportMode } from "../domain/types.ts"
-import { facilitiesForActivity, facilities, unmatchedTicketRooms } from "../data/facilities.ts"
+import { facilitiesForActivity, facilities, unmatchedTicketRooms, unnamedSportTicketRooms } from "../data/facilities.ts"
 import { buildDemoSchedule, DEMO_SCHEDULE_PROFILES, describeDemoSlot, formatDemoDate, formatDemoRange, overlapsDailyWindow } from "../data/demoSchedule.ts"
-import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, DEMO_NOTICE, DEMO_SCHEDULE_NOTICE } from "../data/sources.ts"
+import { ACTIVITY_CATALOG, ACTIVITY_GROUPS, DEMO_NOTICE, DEMO_SCHEDULE_NOTICE, URLS } from "../data/sources.ts"
 import { startingPoints } from "../data/startingPoints.ts"
-import { googleMapsDirectionsUrl, nysseJourneyUrl } from "./directions.ts"
+import { cardNysseUrl, googleMapsDirectionsUrl, nysseJourneyUrl } from "./directions.ts"
+import { parseRoute, routeUrl } from "./route.ts"
 import { cardStatus } from "./status.ts"
 import { LOCATION_COPY } from "./geolocation.ts"
 import { chooseNearestFittingDemo, findMatches } from "./match.ts"
@@ -19,6 +20,152 @@ import { readStoredLanguage } from "../i18n/types.ts"
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
+}
+
+function ids(list: { facility: { id: string } }[]): string {
+  return list.map((item) => item.facility.id).sort().join(",")
+}
+
+function checkOutingCap(): void {
+  const point = startingPoints.find((item) => item.id === "keskustori")
+  if (!point) throw new Error("Keskustori start exists")
+  const origin = { latitude: point.latitude, longitude: point.longitude }
+  const base = {
+    activityId: "gym" as const,
+    maxOutingMinutes: 90 as const,
+    minWorkoutMinutes: 45 as const,
+    transport: "cycling" as const,
+    startingPointId: "keskustori",
+  }
+  for (const [availableFrom, availableUntil] of [
+    ["14:30", "16:00"],
+    ["17:00", "19:30"],
+  ]) {
+    const legacy = findMatches({ ...base, availableFrom, availableUntil }, origin)
+    const capped = findMatches({ ...base, availableFrom, availableUntil, applyOutingCap: true }, origin)
+    assert(ids(legacy.results) === ids(capped.results), "a missing outing flag keeps the capped results")
+    assert(
+      legacy.timeExclusions.map((item) => item.facilityId).join(",") ===
+        capped.timeExclusions.map((item) => item.facilityId).join(","),
+      "a missing outing flag keeps the same time exclusions",
+    )
+    assert(ids(legacy.visitCautions) === ids(capped.visitCautions), "a missing outing flag keeps visit cautions")
+    assert(legacy.reachable.length === 0 && capped.reachable.length === 0, "the capped search has no reachable group")
+  }
+
+  const evening = { ...base, availableFrom: "17:00", availableUntil: "19:30" }
+  const capped = findMatches({ ...evening, applyOutingCap: true }, origin)
+  const open = findMatches({ ...evening, applyOutingCap: false }, origin)
+  assert(ids(capped.results) === "naashalli", "with the outing chip on, the normal match is only Nääshalli")
+  assert(capped.timeExclusions.length > 0, "with the outing chip on, far halls stay outside this outing")
+  assert(open.results.some((item) => item.facility.id === "naashalli"), "with the outing chip off, Nääshalli stays")
+  assert(open.reachable.length > 0, "with the outing chip off, far halls stay reachable")
+  for (const far of capped.timeExclusions) {
+    assert(
+      open.reachable.some((item) => item.facility.id === far.facilityId),
+      `${far.facilityId} is reachable when the outing chip is off`,
+    )
+  }
+  assert(
+    !open.timeExclusions.some((item) => open.reachable.some((reach) => reach.facility.id === item.facilityId)),
+    "a reachable hall is not also excluded",
+  )
+  for (const reach of open.reachable) {
+    const row = reach.windowSlots.find((slot) => slot.id === reach.slot?.id)
+    assert(row?.status === "demo_available", `${reach.facility.id} keeps an open demo row`)
+    assert(reach.chosenInterval !== null, `${reach.facility.id} shows usable hours`)
+    assert(reach.timeFit.fits === false, `${reach.facility.id} is not a normal match`)
+    assert(reach.slot?.provenance.status === "demonstration", `${reach.facility.id} stays demo data`)
+  }
+  assert(
+    open.visitCautions.some((item) => item.facility.id === "tampere-stadium") &&
+      !open.results.some((item) => item.facility.id === "tampere-stadium") &&
+      !open.reachable.some((item) => item.facility.id === "tampere-stadium"),
+    "the stadium stays a visit caution with the outing chip off",
+  )
+  const busyWords = /\b(booked|busy|full|occupied|available)\b|varattu|vapaa|täynnä/i
+  for (const language of ["en", "fi"] as const) {
+    for (const key of ["card.reach", "results.reachBody", "results.reachTitle", "status.longTrip"] as const) {
+      const copy = translate(language, key, { minutes: 35, max: 90 })
+      assert(!busyWords.test(copy), `${language} ${key} does not call the hall busy or free`)
+    }
+  }
+  assert(translate("en", "outing.chip") === "Back within the outing", "English outing chip label")
+  assert(translate("fi", "outing.chip") === "Palaa käynnin sisällä", "Finnish outing chip label")
+}
+
+function checkUnnamedTicketRooms(): void {
+  for (const id of ["kauppi", "exhibition-hall-b"]) {
+    for (const activityId of ACTIVITY_IDS) {
+      assert(
+        !facilitiesForActivity(activityId).some((facility) => facility.id === id),
+        `${id} is not matched to ${activityId}`,
+      )
+    }
+    const facility = unnamedSportTicketRooms.find((item) => item.id === id)
+    assert(facility !== undefined, `${id} is in the unnamed-sport ticket group`)
+    assert(facility?.slots.length === 0 && facility.activities.length === 0, `${id} has no demo slot`)
+    assert(facility?.programme.sourceUrl === URLS.ticket, `${id} is a ticket room`)
+  }
+  const hallA = facilities.find((item) => item.id === "exhibition")
+  assert(hallA?.coordinateSource.query?.includes("lipas-id 89037") === true, "hall A uses its own LIPAS point")
+  assert(hallA?.coordinateSource.retrievedOn === "2026-10-25", "hall A records the retrieval date")
+  assert(hallA?.activities.some((activity) => activity.id === "football") === true, "football stays on hall A")
+  const hallB = facilities.find((item) => item.id === "exhibition-hall-b")
+  assert(hallB?.coordinateSource.query?.includes("lipas-id 88985") === true, "hall B keeps its LIPAS point")
+  const firstList = ACTIVITY_GROUPS.slice(0, -2).flatMap((group) => [...group.ids]) as ActivityId[]
+  for (const activityId of firstList) {
+    assert(
+      facilitiesForActivity(activityId).some((facility) => facility.programme.sourceUrl === URLS.ticket),
+      `${activityId} in the first list has a ticket room`,
+    )
+  }
+  const notTicket = ACTIVITY_GROUPS.find((group) => group.label === "Not the Liikkuva Tampere ticket")
+  assert(
+    notTicket?.ids.join(",") === "swimming,figure-skating,ice-hockey,outdoor-ice",
+    "pools and ice sit in the separate group",
+  )
+  assert(facilitiesForActivity("swimming").length > 0, "pool data stays")
+  for (const room of ["Reima", "Birgitta", "Desiree", "Eila"]) {
+    assert(unmatchedTicketRooms.some((item) => item.room.includes(room)), `${room} stays unmatched`)
+  }
+  const naashalli = facilities.find((item) => item.id === "naashalli")
+  const start = startingPoints.find((item) => item.id === "keskustori")
+  if (!naashalli || !start) throw new Error("Nääshalli and Keskustori exist")
+  const cycling = cardNysseUrl(naashalli, "cycling", start)
+  assert(cycling !== null && cycling.startsWith("https://reittiopas.tampere.fi/"), "ticket cards link Nysse for cycling")
+  assert(cardNysseUrl(naashalli, "walking", start) !== null, "ticket cards link Nysse for walking")
+  const pool = facilitiesForActivity("swimming").find((item) => item.programme.sourceUrl !== URLS.ticket)
+  if (pool) assert(cardNysseUrl(pool, "cycling", start) === null, "non-ticket places keep Nysse for public transport only")
+}
+
+function checkRouteLine(): void {
+  const from = { latitude: 61.4978, longitude: 23.7609 }
+  const to = { latitude: 61.4641, longitude: 23.7323 }
+  assert(
+    routeUrl("car", from, to)?.startsWith("https://routing.openstreetmap.de/routed-car/route/v1/") === true,
+    "car uses the car profile",
+  )
+  assert(routeUrl("public-transport", from, to) === null, "public transport has no drawn line")
+  assert(!/nysse/i.test(translate("en", "map.routeTransit")), "the transit note does not invent a Nysse route")
+  const foot = routeUrl("walking", from, to) ?? ""
+  const bike = routeUrl("cycling", from, to) ?? ""
+  assert(foot.startsWith("https://routing.openstreetmap.de/routed-foot/route/v1/"), "walking uses the foot profile")
+  assert(bike.startsWith("https://routing.openstreetmap.de/routed-bike/route/v1/"), "cycling uses the bike profile")
+  assert(foot.includes("23.7609,61.4978;23.7323,61.4641"), "route request is lon,lat from start to place")
+  assert(foot.includes("geometries=geojson") && !foot.includes("digitransit"), "route request asks for GeoJSON only")
+  assert(parseRoute({ code: "NoRoute", routes: [] }) === null, "a failed route answer is rejected")
+  assert(parseRoute({ code: "Ok", routes: [{ duration: 60, geometry: { type: "LineString", coordinates: [[1, 2]] } }] }) === null, "a one-point line is rejected")
+  const parsed = parseRoute({
+    code: "Ok",
+    routes: [{ duration: 1500, geometry: { type: "LineString", coordinates: [[23.76, 61.49], [23.73, 61.46]] } }],
+  })
+  assert(parsed?.durationMinutes === 25 && parsed.path[0][0] === 61.49, "a route answer becomes lat,lon with minutes")
+  assert(translate("en", "map.routeFailed") === "Straight-line estimate. The route was not built.", "English route fallback")
+  assert(translate("fi", "map.routeFailed") === "Arvio linnuntietä. Reittiä ei rakennettu.", "Finnish route fallback")
+  for (const language of ["en", "fi"] as const) {
+    assert(!/nysse/i.test(translate(language, "map.routeOk", { minutes: 10 }).replace(/not a Nysse journey|ei Nysse-reitti/, "")), `${language} route line is not called a Nysse route`)
+  }
 }
 
 export function runSelfCheck(): void {
@@ -50,6 +197,9 @@ export function runSelfCheck(): void {
 
   checkSlotAttendance()
   checkDemoSchedule()
+  checkOutingCap()
+  checkUnnamedTicketRooms()
+  checkRouteLine()
   assert(parseClock("14:30") === 14 * 60 + 30, "clock parse")
   assert(formatClock(14 * 60 + 30) === "14:30", "clock format")
   assert(

@@ -50,10 +50,11 @@ function lipasPoint(
   matchedName: string,
   recordEventDate: string,
   note: string,
+  retrievedOn: CoordinateSource["retrievedOn"] = "2026-10-24",
 ): Pick<Facility, "latitude" | "longitude" | "coordinateSource"> {
   const coordinateSource: CoordinateSource = {
     provider: "LIPAS",
-    retrievedOn: "2026-10-24",
+    retrievedOn,
     query: `lipas-id ${lipasId}`,
     matchedName,
     recordEventDate,
@@ -66,7 +67,7 @@ function lipasPoint(
 /**
  * Programme membership and room links come from the Finnish Liikkuva Tampere page
  * (updated 15 October 2026). Coordinates come from the public LIPAS API v2,
- * city code 837, retrieved 24 October 2026. LIPAS does not decide ticket
+ * city code 837, retrieved 24 October 2026 (Exhibition hall A on 25 October). LIPAS does not decide ticket
  * eligibility. Demo slots are still examples.
  *
  * Tampere open data does not publish these indoor halls. Swimming pools,
@@ -375,6 +376,7 @@ export const facilities: Facility[] = [
       "LIPAS sports-hall point for Kauppi Sports Center (lipas-id 605616). It is not the Well Gym record in the same building. This does not confirm ticket eligibility or a surveyed entrance.",
     ),
     activities: [],
+    unnamedTicketRoom: "Courts 1–3",
     otherDocumentedUses:
       "The ticket covers ball-hall courts 1–3. It does not name the sport or link a Timmi room, and no city page confirming a sport for these courts was found, so they are not matched.",
     slots: [],
@@ -390,19 +392,20 @@ export const facilities: Facility[] = [
     area: "Härmälä",
     address: "Ilmailunkatu 20, 33900 Tampere",
     ...lipasPoint(
-      88985,
-      61.4648981049474,
-      23.732429264912,
-      "Tampereen messukeskuksen B-halli",
-      "2017-09-08",
-      "LIPAS point for B-hall (lipas-id 88985). Hall A has a separate point. The LIPAS event-date on this record is 8 September 2017. This does not confirm ticket eligibility or a surveyed entrance.",
+      89037,
+      61.4641151473293,
+      23.7323505621921,
+      "Tampereen messukeskuksen A-halli",
+      "2017-09-15",
+      "LIPAS point for A-hall (lipas-id 89037). Hall B has its own point. The LIPAS event-date on this record is 15 September 2017. This does not confirm ticket eligibility or a surveyed entrance.",
+      "2026-10-25",
     ),
     activities: [
       {
         id: "football",
         spaceName: "Hall A",
         detail:
-          "The city page says hall A is a football and athletics training hall. The ticket covers hall A during the sports season. Hall B is described as an athletics hall, so it is not matched for football. The map pin is the LIPAS point for hall B. The ticket page does not link a Timmi room.",
+          "The city page says hall A is a football and athletics training hall. The ticket covers hall A during the sports season. Hall B is described as an athletics hall, so it is not matched for football. The ticket page does not link a Timmi room.",
       },
     ],
     otherDocumentedUses:
@@ -414,8 +417,36 @@ export const facilities: Facility[] = [
     schedule: liikkuvaSchedule,
     programme,
   },
+  {
+    id: "exhibition-hall-b",
+    name: "Tampere Exhibition and Sports Centre, Hall B",
+    localName: "Tampereen Messu- ja Urheilukeskus, Hall B",
+    area: "Härmälä",
+    address: "Ilmailunkatu 20, 33900 Tampere",
+    ...lipasPoint(
+      88985,
+      61.4648981049474,
+      23.732429264912,
+      "Tampereen messukeskuksen B-halli",
+      "2017-09-08",
+      "LIPAS point for B-hall (lipas-id 88985). The LIPAS event-date on this record is 8 September 2017. This does not confirm ticket eligibility or a surveyed entrance.",
+    ),
+    activities: [],
+    unnamedTicketRoom: "Hall B",
+    otherDocumentedUses:
+      "Hall B is on the ticket and is described as an athletics practice hall. It is not matched to a sport.",
+    slots: [],
+    infoUrl:
+      "https://www.tampere.fi/liikunta/liikuntapaikat/sisaliikuntapaikat/tampereen-messu-ja-urheilukeskus",
+    kind: "sports-centre",
+    schedule: liikkuvaSchedule,
+    programme,
+  },
   ...waterAndIceFacilities,
 ]
+
+/** Ticket rooms that are listed and mapped, but have no named sport. They never receive a demo slot. */
+export const unnamedSportTicketRooms = facilities.filter((facility) => facility.unnamedTicketRoom !== undefined)
 
 /**
  * Ticket rooms named in the facility records that are not a searchable match.
@@ -443,12 +474,7 @@ export const unmatchedTicketRooms = [
     reason: "The ticket covers these courts. It does not name the sport or link a Timmi room, so they are not matched.",
   },
   {
-    facilityName: "Tampere Exhibition and Sports Centre",
-    room: "Hall A coordinate",
-    reason: "Football is matched to hall A. The stored pin is the LIPAS point for hall B, not a confirmed hall A door.",
-  },
-  {
-    facilityName: "Tampere Exhibition and Sports Centre",
+    facilityName: "Tampere Exhibition and Sports Centre, Hall B",
     room: "Hall B",
     reason: "Hall B is on the ticket and is described as an athletics practice hall. It is not matched to a sport.",
   },

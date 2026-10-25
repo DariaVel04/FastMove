@@ -166,6 +166,17 @@ export function HeroSearch({
                 {t("when.applied", { from: value.availableFrom, until: value.availableUntil })}
               </p>
             )}
+            <button
+              type="button"
+              className="outing-chip"
+              aria-pressed={value.applyOutingCap === true}
+              onClick={() => onChange({ ...value, applyOutingCap: value.applyOutingCap !== true })}
+            >
+              <span>{t("outing.chip")}</span>
+              <span className="outing-chip-value">
+                {t("outing.chipValue", { max: value.maxOutingMinutes, min: value.minWorkoutMinutes })}
+              </span>
+            </button>
           </fieldset>
 
           <fieldset>

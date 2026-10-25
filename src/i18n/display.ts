@@ -49,9 +49,9 @@ const GROUP_KEYS: Record<string, MessageKey> = {
   Fitness: "group.fitness",
   "Racket Sports": "group.racket",
   "Ball Sports": "group.ball",
-  "Water Sports": "group.water",
-  "Ice Sports": "group.ice",
   Other: "group.other",
+  "Not named on the ticket page": "group.unnamed",
+  "Not the Liikkuva Tampere ticket": "group.notTicket",
 }
 
 export function sportLabel(language: Language, activityId: ActivityId): string {
@@ -181,6 +181,10 @@ export function localizedReasons(result: ScoredMatch, language: Language): strin
       exercise: fit.exerciseMinutes,
     }),
   ]
+  if (!fit.fits) {
+    reasons.push(translate(language, "reason.fictional"))
+    return reasons
+  }
   if (fit.remainingMinutes > result.slot.durationMinutes) {
     reasons.push(
       translate(language, "reason.slotShorter", {

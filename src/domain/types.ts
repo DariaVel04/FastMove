@@ -50,6 +50,11 @@ export type SearchQuery = {
   minWorkoutMinutes: MinWorkoutMinutes
   transport: TransportMode
   startingPointId: string
+  /**
+   * When false, halls whose example interval is reachable in the free window
+   * stay listed even if the return does not fit the outing. Omitted means true.
+   */
+  applyOutingCap?: boolean
 }
 
 /**
@@ -68,7 +73,7 @@ export type Provenance = {
 
 export type CoordinateSource = {
   provider: "LIPAS" | "OpenStreetMap Nominatim"
-  retrievedOn: "2026-10-24"
+  retrievedOn: "2026-10-24" | "2026-10-25"
   query: string
   matchedName: string
   note: string
@@ -182,6 +187,8 @@ export type Facility = {
   schedule: PlaceSchedule
   /** City-documented uses that are not a confirmed match for the selected activities. */
   otherDocumentedUses?: string
+  /** A ticket room the city page lists without naming a sport. Never matched to an activity. */
+  unnamedTicketRoom?: string
   infoUrl: string
   programme: Provenance
 }
@@ -286,6 +293,11 @@ export type MatchOutcome = {
    */
   confirmed: ScoredMatch[]
   timeExclusions: TimeExclusion[]
+  /**
+   * Filled only when applyOutingCap is false: an example interval can be reached
+   * inside the free window, but the return does not fit the outing. Not a busy hall.
+   */
+  reachable: ScoredMatch[]
   scheduleNotes: ScheduleNote[]
   /** Ticket rooms the city page does not offer as a normal individual visit. */
   visitCautions: ScoredMatch[]

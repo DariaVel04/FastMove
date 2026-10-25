@@ -1,8 +1,16 @@
-import type { MapOrigin, ScheduleNote, ScoredMatch, SortKey, TimeExclusion, TransportMode } from "../domain/types.ts"
-import { facilities, unmatchedTicketRooms } from "../data/facilities.ts"
+import type {
+  Facility,
+  MapOrigin,
+  ScheduleNote,
+  ScoredMatch,
+  SortKey,
+  TimeExclusion,
+  TransportMode,
+} from "../domain/types.ts"
+import { facilities, unmatchedTicketRooms, unnamedSportTicketRooms } from "../data/facilities.ts"
 import { URLS } from "../data/sources.ts"
 import { countMatchingOptions, ticketCoverageLabel } from "../lib/present.ts"
-import { googleMapsDirectionsUrl, nysseJourneyUrl } from "../lib/directions.ts"
+import { cardNysseUrl, googleMapsDirectionsUrl } from "../lib/directions.ts"
 import { straightLineKm } from "../lib/travel.ts"
 import { facilityTitle, localizedDistance } from "../i18n/display.ts"
 import { useI18n } from "../i18n/useI18n.ts"
@@ -19,6 +27,8 @@ type RecommendationsProps = {
   scheduleNotes: ScheduleNote[]
   timeExclusions: TimeExclusion[]
   visitCautions: ScoredMatch[]
+  reachable: ScoredMatch[]
+  maxOutingMinutes: number
   minWorkoutMinutes: number
   transport: TransportMode | null
   sort: SortKey
@@ -36,6 +46,8 @@ export function Recommendations({
   scheduleNotes,
   timeExclusions,
   visitCautions,
+  reachable,
+  maxOutingMinutes,
   minWorkoutMinutes,
   transport,
   sort,
@@ -117,6 +129,26 @@ export function Recommendations({
               ))}
             </div>
           )}
+
+          {reachable.length > 0 ? (
+            <div className="result-group">
+              <h3>{t("results.reachTitle")}</h3>
+              <p className="field-note">{t("results.reachBody", { minutes: maxOutingMinutes })}</p>
+              <div className="result-list">
+                {reachable.map((result) => (
+                  <ResultCard
+                    key={result.facility.id}
+                    result={result}
+                    variant="reachable"
+                    maxOutingMinutes={maxOutingMinutes}
+                    selected={selectedFacilityId === result.facility.id}
+                    onShowOnMap={onShowOnMap}
+                    directionsOrigin={directionsOrigin}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {unconfirmed.length > 0 ? (
             <div className="result-group">
@@ -210,11 +242,29 @@ export function Recommendations({
           ))}
         </>
       )}
-      <section className="unmatched-rooms" aria-labelledby="unmatched-title">
-        <h3 id="unmatched-title">{t("results.unmatchedTitle")}</h3>
+      <section className="result-group unnamed-rooms" aria-labelledby="unnamed-title">
+        <h3 id="unnamed-title">{t("results.unnamedTitle")}</h3>
+        <div className="result-list">
+          {unnamedSportTicketRooms.map((facility) => (
+            <UnnamedRoom
+              key={facility.id}
+              facility={facility}
+              directionsOrigin={directionsOrigin}
+              selected={selectedFacilityId === facility.id}
+              onShowOnMap={onShowOnMap}
+            />
+          ))}
+        </div>
+      </section>
+      <details className="unmatched-rooms">
+        <summary>
+          <h3 id="unmatched-title">
+            {t("results.unmatchedTitle")} ({listedUnmatchedRooms.length})
+          </h3>
+        </summary>
         <p className="field-note">{t("results.unmatchedBody")}</p>
         <ul className="unmatched-list">
-          {unmatchedTicketRooms.map((room) => {
+          {listedUnmatchedRooms.map((room) => {
             const place = facilities.find((item) => item.name === room.facilityName)
             return (
               <li key={`${room.facilityName}-${room.room}`}>
@@ -225,8 +275,58 @@ export function Recommendations({
             )
           })}
         </ul>
-      </section>
+      </details>
     </section>
+  )
+}
+
+const listedUnmatchedRooms = unmatchedTicketRooms.filter(
+  (room) =>
+    !unnamedSportTicketRooms.some(
+      (facility) => facility.name === room.facilityName && facility.unnamedTicketRoom === room.room,
+    ),
+)
+
+function UnnamedRoom({
+  facility,
+  directionsOrigin,
+  selected,
+  onShowOnMap,
+}: {
+  facility: Facility
+  directionsOrigin: MapOrigin | null
+  selected: boolean
+  onShowOnMap: (facilityId: string) => void
+}) {
+  const { language, t, text } = useI18n()
+  const distance = directionsOrigin ? localizedDistance(straightLineKm(directionsOrigin, facility), language) : null
+  return (
+    <article
+      id={`result-${facility.id}`}
+      className={selected ? "result-card result-card--selected" : "result-card"}
+    >
+      <h3>
+        <button type="button" className="card-title-button" onClick={() => onShowOnMap(facility.id)}>
+          {facilityTitle(facility.name, facility.localName, language)}
+        </button>
+      </h3>
+      <p className="card-room">
+        {text(facility.unnamedTicketRoom ?? "")} · {text(ticketCoverageLabel(facility.programme.sourceUrl))}
+      </p>
+      <p className="card-trip">{t("card.unnamedSport")}</p>
+      {distance ? <p className="field-note">{distance}</p> : null}
+      <div className="card-primary-actions">
+        <ExternalLink className="secondary-button" href={URLS.timmiApp}>
+          {t("link.timmi")}
+        </ExternalLink>
+        <button type="button" className="secondary-button" onClick={() => onShowOnMap(facility.id)}>
+          {t("link.showMap")}
+        </button>
+        <ExternalLink className="secondary-button" href={facility.infoUrl}>
+          {t("link.city")}
+        </ExternalLink>
+      </div>
+    </article>
   )
 }
 
@@ -324,8 +424,8 @@ function OutingMiss({
         )
       : null
   const nysseUrl =
-    facility && directionsOrigin && transport === "public-transport"
-      ? nysseJourneyUrl(facility, {
+    facility && directionsOrigin && transport
+      ? cardNysseUrl(facility, transport, {
           latitude: directionsOrigin.latitude,
           longitude: directionsOrigin.longitude,
         })

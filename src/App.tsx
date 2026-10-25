@@ -23,6 +23,7 @@ const initialQuery: SearchQuery = {
   minWorkoutMinutes: 45,
   transport: "cycling",
   startingPointId: "hervanta-campus",
+  applyOutingCap: false,
 }
 
 type SubmittedSearch = {
@@ -211,6 +212,8 @@ export default function App() {
             scheduleNotes={outcome?.scheduleNotes ?? []}
             timeExclusions={outcome?.timeExclusions ?? []}
             visitCautions={outcome?.visitCautions ?? []}
+            reachable={outcome?.reachable ?? []}
+            maxOutingMinutes={submitted?.query.maxOutingMinutes ?? query.maxOutingMinutes}
             minWorkoutMinutes={submitted?.query.minWorkoutMinutes ?? query.minWorkoutMinutes}
             transport={submitted?.query.transport ?? null}
             sort={sort}
@@ -222,7 +225,6 @@ export default function App() {
           <FacilityMap
             start={activeOrigin}
             results={visible}
-            linked={[...(outcome?.results ?? []), ...(outcome?.visitCautions ?? [])]}
             transport={submitted?.query.transport ?? query.transport}
             focusTick={focusTick}
             selectedFacilityId={selectedFacilityId}
